@@ -28,9 +28,9 @@ public final class SidebarSelectionRowView: NSTableRowView {
 
     private func updateSubviewColors() {
         // Selected rows: SidebarCellView.backgroundStyle fires when interiorBackgroundStyle
-        // changes (.emphasized ↔ .normal), so the cell owns its own icon and text colour.
+        // changes (.emphasized ↔ .normal), so the cell owns its own icon, text, and count colour.
         // Non-selected rows: backgroundStyle stays .normal regardless of emphasis, so
-        // AppKit never fires it — we must set icon and text explicitly here.
+        // AppKit never fires it — we must set icon, text, and count explicitly here.
         guard !isSelected else { return }
         let color: NSColor = isEmphasized ? .labelColor : .secondaryLabelColor
         let config = NSImage.SymbolConfiguration(textStyle: .body, scale: .small)
@@ -39,6 +39,7 @@ public final class SidebarSelectionRowView: NSTableRowView {
             guard let cell = subview as? NSTableCellView else { continue }
             cell.imageView?.symbolConfiguration = config
             cell.textField?.textColor = color
+            (cell as? SidebarCellView)?.countField?.textColor = color
         }
     }
 }

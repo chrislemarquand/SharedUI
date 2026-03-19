@@ -12,6 +12,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
 
     public private(set) var selectedItem: Item?
     public var onSelectionChange: ((Item) -> Void)?
+    public var menuProvider: ((Item) -> NSMenu?)?
 
     public init(sections: [Section], items: [Item]) {
         self.sections = sections
@@ -24,9 +25,26 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
 
     public func reloadData() {
         let previouslySelected = selectedItem
+
+        // Snapshot expanded state before boxing is rebuilt.
+        // Empty on first call (viewDidLoad hasn't run yet) → treat as first load → expand all.
+        var expandedSections: Set<Section> = []
+        let isFirstLoad = orderedSectionBoxes.isEmpty
+        if !isFirstLoad {
+            for box in orderedSectionBoxes where outlineView.isItemExpanded(box) {
+                expandedSections.insert(box.section)
+            }
+        }
+
         rebuildBoxes()
         outlineView.reloadData()
-        expandAll()
+
+        for box in orderedSectionBoxes {
+            if isFirstLoad || expandedSections.contains(box.section) {
+                outlineView.expandItem(box)
+            }
+        }
+
         if let prev = previouslySelected {
             selectItem(where: { $0 == prev })
         }
@@ -41,9 +59,13 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         }
     }
 
+    public func focusSidebar() {
+        view.window?.makeFirstResponder(outlineView)
+    }
+
     // MARK: - Private state
 
-    private var outlineView: NSOutlineView!
+    private var outlineView: SidebarOutlineView!
     private var scrollView: NSScrollView!
     private let proxy = OutlineProxy()
 
@@ -70,16 +92,10 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         }
     }
 
-    private func expandAll() {
-        for box in orderedSectionBoxes {
-            outlineView.expandItem(box)
-        }
-    }
-
     // MARK: - View lifecycle
 
     override public func loadView() {
-        outlineView = NSOutlineView()
+        outlineView = SidebarOutlineView()
         outlineView.style = .sourceList
         outlineView.headerView = nil
         outlineView.floatsGroupRows = false
@@ -93,6 +109,12 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         column.isEditable = false
         outlineView.addTableColumn(column)
         outlineView.outlineTableColumn = column
+
+        outlineView.menuForClickedRow = { [weak self] row in
+            guard let self, row >= 0,
+                  let box = outlineView.item(atRow: row) as? ItemBox else { return nil }
+            return menuProvider?(box.item)
+        }
 
         wireProxy()
         outlineView.dataSource = proxy
@@ -110,10 +132,8 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
 
     override public func viewDidLoad() {
         super.viewDidLoad()
-        rebuildBoxes()
-        outlineView.reloadData()
-        expandAll()
-        if let first = items.first {
+        reloadData()
+        if selectedItem == nil, let first = items.first {
             selectItem(where: { $0 == first })
         }
     }
@@ -142,17 +162,9 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             return orderedSectionBoxes[0]
         }
 
-        proxy.isItemExpandable = { item in
-            item is SectionBox
-        }
-
-        proxy.isGroupItem = { item in
-            item is SectionBox
-        }
-
-        proxy.shouldSelectItem = { item in
-            item is ItemBox
-        }
+        proxy.isItemExpandable = { item in item is SectionBox }
+        proxy.isGroupItem = { item in item is SectionBox }
+        proxy.shouldSelectItem = { item in item is ItemBox }
 
         proxy.rowViewForItem = { [weak self] item in
             guard let self, item is ItemBox else { return nil }
@@ -165,7 +177,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             return rowView
         }
 
-        proxy.viewForItem = { [weak self] (tableColumn, item) in
+        proxy.viewForItem = { [weak self] (_, item) in
             guard let self else { return nil }
             if let sectionBox = item as? SectionBox {
                 return makeSectionHeaderView(title: sectionBox.section.title)
@@ -202,7 +214,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         cell.addSubview(label)
         cell.textField = label
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 0),
+            label.leadingAnchor.constraint(equalTo: cell.leadingAnchor),
             label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
         return cell
@@ -225,10 +237,31 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             titleField.translatesAutoresizingMaskIntoConstraints = false
             titleField.lineBreakMode = .byTruncatingTail
 
+            let countField = NSTextField(labelWithString: "")
+            countField.translatesAutoresizingMaskIntoConstraints = false
+            countField.font = .monospacedDigitSystemFont(
+                ofSize: NSFont.smallSystemFontSize, weight: .regular)
+            countField.textColor = .tertiaryLabelColor
+            countField.alignment = .right
+            countField.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+            countField.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+
             cell.addSubview(icon)
             cell.addSubview(titleField)
+            cell.addSubview(countField)
             cell.imageView = icon
             cell.textField = titleField
+            cell.countField = countField
+
+            // Two mutually exclusive trailing constraints for the title field:
+            // • titleTrailingToCount — active when a count is shown; title stops before the count
+            // • titleTrailingToCell  — active when no count; title can reach the cell edge
+            let titleToCount = titleField.trailingAnchor.constraint(
+                lessThanOrEqualTo: countField.leadingAnchor, constant: -4)
+            let titleToCell = titleField.trailingAnchor.constraint(
+                lessThanOrEqualTo: cell.trailingAnchor, constant: -8)
+            cell.titleTrailingToCount = titleToCount
+            cell.titleTrailingToCell = titleToCell
 
             NSLayoutConstraint.activate([
                 icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
@@ -238,7 +271,10 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
 
                 titleField.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 4),
                 titleField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                titleField.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
+                titleToCell,     // active by default — no count on initial creation
+
+                countField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+                countField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             ])
         }
 
@@ -247,6 +283,19 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             systemSymbolName: sidebarItem.symbolName,
             accessibilityDescription: sidebarItem.title
         )
+
+        if let text = sidebarItem.badgeText, !text.isEmpty {
+            cell.countField?.stringValue = text
+            cell.countField?.isHidden = false
+            cell.titleTrailingToCount?.isActive = true
+            cell.titleTrailingToCell?.isActive = false
+        } else {
+            cell.countField?.stringValue = ""
+            cell.countField?.isHidden = true
+            cell.titleTrailingToCount?.isActive = false
+            cell.titleTrailingToCell?.isActive = true
+        }
+
         return cell
     }
 }
@@ -297,5 +346,19 @@ final class OutlineProxy: NSObject, NSOutlineViewDataSource, NSOutlineViewDelega
 
     func outlineViewSelectionDidChange(_ notification: Notification) {
         selectionDidChange?(notification)
+    }
+}
+
+// MARK: - NSOutlineView subclass for per-row context menus
+
+// Overrides menu(for:) to deliver right-click events to the controller's menuProvider
+// without requiring @objc in a generic class extension.
+final class SidebarOutlineView: NSOutlineView {
+    var menuForClickedRow: ((Int) -> NSMenu?)?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let point = convert(event.locationInWindow, from: nil)
+        let row = self.row(at: point)
+        return menuForClickedRow?(row) ?? super.menu(for: event)
     }
 }
