@@ -1,12 +1,9 @@
 import AppKit
 
-// SidebarCellView owns icon and text colour for the selected row.
-// AppKit calls backgroundStyle when interiorBackgroundStyle changes
-// (.emphasized ↔ .normal) on the row view.
-//
-// Icon colour uses contentTintColor — a direct NSImageView property
-// unaffected by AppKit's backgroundStyle machinery (which only processes
-// text fields). symbolConfiguration is kept purely for size/scale.
+// SidebarCellView ensures the icon always matches the text colour.
+// AppKit manages text field colours via backgroundStyle. We read what AppKit
+// set on the text field and mirror it to the image view in the same setter call —
+// one moment, physically impossible to be different colours.
 public final class SidebarCellView: NSTableCellView {
 
     var countField: NSTextField?
@@ -17,10 +14,10 @@ public final class SidebarCellView: NSTableCellView {
         get { super.backgroundStyle }
         set {
             super.backgroundStyle = newValue
-            let emphasized = newValue == .emphasized
-            imageView?.contentTintColor = emphasized ? .white : .labelColor
-            textField?.textColor      = emphasized ? .white : .labelColor
-            countField?.textColor     = emphasized ? .white : .labelColor
+            // Mirror AppKit's choice of title text colour directly to the icon.
+            imageView?.contentTintColor = textField?.textColor
+            // Count field is visually secondary except when on the accent pill.
+            countField?.textColor = newValue == .emphasized ? textField?.textColor : .tertiaryLabelColor
         }
     }
 }

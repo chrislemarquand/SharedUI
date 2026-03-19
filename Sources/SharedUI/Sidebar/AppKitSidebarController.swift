@@ -232,8 +232,6 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             let icon = NSImageView()
             icon.translatesAutoresizingMaskIntoConstraints = false
             icon.imageScaling = .scaleNone
-            // Size/scale only — colour is managed via contentTintColor so it
-            // is never entangled with AppKit's backgroundStyle text-field path.
             icon.symbolConfiguration = NSImage.SymbolConfiguration(textStyle: .body, scale: .small)
 
             let titleField = NSTextField(labelWithString: "")
