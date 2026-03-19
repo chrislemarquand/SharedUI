@@ -65,6 +65,7 @@ open class ThreePaneSplitViewController: NSSplitViewController {
     private let contentBrowserItem: NSSplitViewItem
     private let inspectorItem:     NSSplitViewItem
 
+    private let inspectorStartsVisible: Bool
     private var splitResizeObservers: [NSObjectProtocol] = []
     private var isPaneStateSyncScheduled = false
     private var didApplyInitialContentSplit = false
@@ -80,10 +81,12 @@ open class ThreePaneSplitViewController: NSSplitViewController {
         content: NSViewController,
         inspector: NSViewController,
         mainSplitAutosaveName: String,
-        contentSplitAutosaveName: String
+        contentSplitAutosaveName: String,
+        inspectorStartsVisible: Bool = true
     ) {
-        mainAutosaveName    = mainSplitAutosaveName
-        contentAutosaveName = contentSplitAutosaveName
+        mainAutosaveName          = mainSplitAutosaveName
+        contentAutosaveName       = contentSplitAutosaveName
+        self.inspectorStartsVisible = inspectorStartsVisible
 
         // Split items must be created before super.init.
         sidebarItem       = NSSplitViewItem(sidebarWithViewController: sidebar)
@@ -199,7 +202,7 @@ open class ThreePaneSplitViewController: NSSplitViewController {
     private func ensureInitialInspectorVisibility() {
         guard !didApplyInitialInspectorVisibility else { return }
         didApplyInitialInspectorVisibility = true
-        inspectorItem.isCollapsed = false
+        inspectorItem.isCollapsed = !inspectorStartsVisible
         schedulePaneStateSync()
     }
 
