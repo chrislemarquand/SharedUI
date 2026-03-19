@@ -29,18 +29,24 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         // Snapshot expanded state before boxing is rebuilt.
         // Empty on first call (viewDidLoad hasn't run yet) → treat as first load → expand all.
         var expandedSections: Set<Section> = []
+        let previousSections: Set<Section>
         let isFirstLoad = orderedSectionBoxes.isEmpty
         if !isFirstLoad {
+            previousSections = Set(orderedSectionBoxes.map { $0.section })
             for box in orderedSectionBoxes where outlineView.isItemExpanded(box) {
                 expandedSections.insert(box.section)
             }
+        } else {
+            previousSections = []
         }
 
         rebuildBoxes()
         outlineView.reloadData()
 
         for box in orderedSectionBoxes {
-            if isFirstLoad || expandedSections.contains(box.section) {
+            // Expand if: first load, was already expanded, or is a newly appeared section.
+            let isNew = !previousSections.contains(box.section)
+            if isFirstLoad || expandedSections.contains(box.section) || isNew {
                 outlineView.expandItem(box)
             }
         }
