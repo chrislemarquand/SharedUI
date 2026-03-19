@@ -166,17 +166,6 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         proxy.isGroupItem = { item in item is SectionBox }
         proxy.shouldSelectItem = { item in item is ItemBox }
 
-        proxy.rowViewForItem = { [weak self] item in
-            guard let self, item is ItemBox else { return nil }
-            let id = NSUserInterfaceItemIdentifier("SidebarSelectionRowView")
-            if let reused = outlineView.makeView(withIdentifier: id, owner: nil) as? SidebarSelectionRowView {
-                return reused
-            }
-            let rowView = SidebarSelectionRowView()
-            rowView.identifier = id
-            return rowView
-        }
-
         proxy.viewForItem = { [weak self] (_, item) in
             guard let self else { return nil }
             if let sectionBox = item as? SectionBox {
@@ -313,7 +302,6 @@ final class OutlineProxy: NSObject, NSOutlineViewDataSource, NSOutlineViewDelega
     var isItemExpandable: ((Any) -> Bool)?
     var isGroupItem: ((Any) -> Bool)?
     var shouldSelectItem: ((Any) -> Bool)?
-    var rowViewForItem: ((Any) -> NSTableRowView?)?
     var viewForItem: ((NSTableColumn?, Any) -> NSView?)?
     var selectionDidChange: ((Notification) -> Void)?
 
@@ -335,10 +323,6 @@ final class OutlineProxy: NSObject, NSOutlineViewDataSource, NSOutlineViewDelega
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
         shouldSelectItem?(item) ?? false
-    }
-
-    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
-        rowViewForItem?(item)
     }
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
