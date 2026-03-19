@@ -32,7 +32,11 @@ public final class SidebarSelectionRowView: NSTableRowView {
         // Non-selected rows: backgroundStyle stays .normal regardless of emphasis, so
         // AppKit never fires it — we must set icon, text, and count explicitly here.
         guard !isSelected else { return }
-        let color: NSColor = isEmphasized ? .labelColor : .secondaryLabelColor
+        // isEmphasized is false both when the window is inactive AND when the window is
+        // active but the sidebar doesn't have focus. We only want secondary colours in the
+        // inactive-window case — when the window is active, items should always be labelColor
+        // regardless of whether the sidebar is the first responder.
+        let color: NSColor = window?.isKeyWindow == true ? .labelColor : .secondaryLabelColor
         let config = NSImage.SymbolConfiguration(textStyle: .body, scale: .small)
             .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
         for subview in subviews {
