@@ -14,7 +14,9 @@ public final class SidebarCellView: NSTableCellView {
         get { super.backgroundStyle }
         set {
             super.backgroundStyle = newValue
-            imageView?.contentTintColor = newValue == .emphasized ? .white : .labelColor
+            let color: NSColor = newValue == .emphasized ? .white : .labelColor
+            imageView?.symbolConfiguration = NSImage.SymbolConfiguration(textStyle: .body, scale: .small)
+                .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
             countField?.textColor = newValue == .emphasized ? .white : .tertiaryLabelColor
         }
     }

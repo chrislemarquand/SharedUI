@@ -221,7 +221,6 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             let icon = NSImageView()
             icon.translatesAutoresizingMaskIntoConstraints = false
             icon.imageScaling = .scaleNone
-            icon.symbolConfiguration = NSImage.SymbolConfiguration(textStyle: .body, scale: .small)
 
             let titleField = NSTextField(labelWithString: "")
             titleField.translatesAutoresizingMaskIntoConstraints = false
