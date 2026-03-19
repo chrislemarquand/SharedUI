@@ -48,7 +48,9 @@ open class ThreePaneSplitViewController: NSSplitViewController {
 
     // MARK: - Standardised pane metrics (identical for all apps using SharedUI)
 
-    private enum Metrics {
+    public enum Metrics {
+        public static let windowDefault:  NSSize  = NSSize(width: 1300, height: 800)
+        public static let windowMinimum:  NSSize  = NSSize(width: 1100, height: 720)
         static let sidebarMin:          CGFloat = 220
         static let contentMin:          CGFloat = 300
         static let inspectorMin:        CGFloat = 260
