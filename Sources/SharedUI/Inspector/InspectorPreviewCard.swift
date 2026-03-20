@@ -27,7 +27,8 @@ public struct InspectorPreviewCard<Overlay: View>: View {
                     .fill(.quaternary.opacity(0.22))
             }
         }
-        .frame(maxWidth: .infinity, minHeight: InspectorMetrics.previewCardHeight)
+        .frame(maxWidth: .infinity)
+        .frame(height: InspectorMetrics.previewCardHeight)
         .overlay {
             if isLoading {
                 ProgressView()
