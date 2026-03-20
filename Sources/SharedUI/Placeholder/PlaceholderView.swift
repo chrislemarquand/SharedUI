@@ -4,7 +4,7 @@ import SwiftUI
 /// Wraps `ContentUnavailableView` so both apps stay visually consistent.
 ///
 /// - `isLoading: false` (default) — shows the symbol, title, and optional description
-/// - `isLoading: true`           — shows the symbol, title, and a ProgressView spinner
+/// - `isLoading: true`           — shows the symbol, title, and an indeterminate progress bar
 public struct PlaceholderView: View {
     let symbolName: String
     let title: String
@@ -28,7 +28,10 @@ public struct PlaceholderView: View {
             Label(title, systemImage: symbolName)
         } description: {
             if isLoading {
-                ProgressView().controlSize(.small)
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .controlSize(.small)
+                    .frame(width: 220)
             } else if let description {
                 Text(description)
             }
