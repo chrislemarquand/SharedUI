@@ -5,18 +5,29 @@ import AppKit
 public final class AppKitSidebarController<Section, Item>: NSViewController
 where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.SectionType == Section {
 
+    public enum InitialSelectionBehavior {
+        case selectFirstItem
+        case noInitialSelection
+    }
+
     // MARK: - Public interface
 
     public var sections: [Section]
     public var items: [Item]
+    public let initialSelectionBehavior: InitialSelectionBehavior
 
     public private(set) var selectedItem: Item?
     public var onSelectionChange: ((Item) -> Void)?
     public var menuProvider: ((Item) -> NSMenu?)?
 
-    public init(sections: [Section], items: [Item]) {
+    public init(
+        sections: [Section],
+        items: [Item],
+        initialSelectionBehavior: InitialSelectionBehavior = .selectFirstItem
+    ) {
         self.sections = sections
         self.items = items
+        self.initialSelectionBehavior = initialSelectionBehavior
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -65,6 +76,12 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         }
     }
 
+    public func clearSelection() {
+        guard outlineView.allowsEmptySelection else { return }
+        outlineView.selectRowIndexes(IndexSet(), byExtendingSelection: false)
+        selectedItem = nil
+    }
+
     public func focusSidebar() {
         view.window?.makeFirstResponder(outlineView)
     }
@@ -105,7 +122,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         outlineView.style = .sourceList
         outlineView.headerView = nil
         outlineView.floatsGroupRows = false
-        outlineView.allowsEmptySelection = false
+        outlineView.allowsEmptySelection = initialSelectionBehavior == .noInitialSelection
         outlineView.allowsMultipleSelection = false
         outlineView.indentationPerLevel = 16
         outlineView.rowSizeStyle = .default
@@ -139,8 +156,13 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     override public func viewDidLoad() {
         super.viewDidLoad()
         reloadData()
-        if selectedItem == nil, let first = items.first {
-            selectItem(where: { $0 == first })
+        switch initialSelectionBehavior {
+        case .selectFirstItem:
+            if selectedItem == nil, let first = items.first {
+                selectItem(where: { $0 == first })
+            }
+        case .noInitialSelection:
+            clearSelection()
         }
     }
 
@@ -186,7 +208,10 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         proxy.selectionDidChange = { [weak self] _ in
             guard let self else { return }
             let row = outlineView.selectedRow
-            guard row >= 0, let box = outlineView.item(atRow: row) as? ItemBox else { return }
+            guard row >= 0, let box = outlineView.item(atRow: row) as? ItemBox else {
+                selectedItem = nil
+                return
+            }
             selectedItem = box.item
             onSelectionChange?(box.item)
         }
