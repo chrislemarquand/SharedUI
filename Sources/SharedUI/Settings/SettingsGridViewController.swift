@@ -91,4 +91,23 @@ open class SettingsGridViewController: NSViewController {
         button.setContentCompressionResistancePriority(.required, for: .vertical)
         return button
     }
+
+    /// Creates a read-only breadcrumb path control. Pass nil to start empty; call
+    /// `updatePathControl(_:url:)` later to populate it once the URL is known.
+    /// When a URL is supplied the control shows at most three path components
+    /// (home dir → parent → item), matching the Photos.app style.
+    public func makePathControl(url: URL?) -> NSPathControl {
+        let control = NSPathControl()
+        control.translatesAutoresizingMaskIntoConstraints = false
+        control.pathStyle = .standard
+        control.isEditable = false
+        control.focusRingType = .none
+        control.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        if let url {
+            control.url = url
+            let all = control.pathItems
+            if all.count > 3 { control.pathItems = Array(all.suffix(3)) }
+        }
+        return control
+    }
 }
