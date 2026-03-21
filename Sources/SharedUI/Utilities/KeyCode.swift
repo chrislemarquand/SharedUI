@@ -4,6 +4,8 @@ public enum KeyCode {
     public static let tab: UInt16 = 48
     public static let space: UInt16 = 49
     public static let escape: UInt16 = 53
+    public static let delete: UInt16 = 51
+    public static let forwardDelete: UInt16 = 117
     public static let `return`: UInt16 = 36
     public static let numpadReturn: UInt16 = 76
     public static let equal: UInt16 = 24
