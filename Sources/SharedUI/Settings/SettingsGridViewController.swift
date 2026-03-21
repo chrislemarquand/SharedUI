@@ -92,6 +92,13 @@ open class SettingsGridViewController: NSViewController {
         return button
     }
 
+    public func makeRadioButton(title: String, action: Selector) -> NSButton {
+        let button = NSButton(radioButtonWithTitle: title, target: self, action: action)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setContentCompressionResistancePriority(.required, for: .vertical)
+        return button
+    }
+
     /// Creates a read-only breadcrumb path control. Pass nil to start empty; call
     /// `updatePathControl(_:url:)` later to populate it once the URL is known.
     /// When a URL is supplied the control shows at most three path components
