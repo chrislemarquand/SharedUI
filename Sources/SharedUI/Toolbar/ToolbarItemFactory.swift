@@ -89,7 +89,6 @@ public enum ToolbarItemFactory {
             item.toolTip = "Zoom in"
         }
         item.autovalidates = false
-        item.isBordered = true
         item.target = target
         item.action = action
         return item
