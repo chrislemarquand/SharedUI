@@ -10,4 +10,11 @@ public protocol AppKitSidebarItemType: Hashable {
     var title: String { get }
     var symbolName: String { get }
     var badgeText: String? { get }
+    var sidebarReorderID: String? { get }
+    var isSidebarReorderable: Bool { get }
+}
+
+public extension AppKitSidebarItemType {
+    var sidebarReorderID: String? { nil }
+    var isSidebarReorderable: Bool { false }
 }

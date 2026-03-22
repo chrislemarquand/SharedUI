@@ -19,6 +19,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     public private(set) var selectedItem: Item?
     public var onSelectionChange: ((Item) -> Void)?
     public var menuProvider: ((Item) -> NSMenu?)?
+    public var onItemsReordered: (([Item]) -> Void)?
 
     public init(
         sections: [Section],
@@ -91,6 +92,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     private var outlineView: SidebarOutlineView!
     private var scrollView: NSScrollView!
     private let proxy = OutlineProxy()
+    private let dragPasteboardType = NSPasteboard.PasteboardType("com.sharedui.sidebar.reorder-item")
 
     // Stable reference-type boxes so NSOutlineView gets consistent identity across calls.
     private var orderedSectionBoxes: [SectionBox] = []
@@ -127,6 +129,8 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         outlineView.indentationPerLevel = 16
         outlineView.rowSizeStyle = .default
         outlineView.focusRingType = .none
+        outlineView.registerForDraggedTypes([dragPasteboardType])
+        outlineView.setDraggingSourceOperationMask(.move, forLocal: true)
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
         column.isEditable = false
@@ -215,6 +219,122 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             selectedItem = box.item
             onSelectionChange?(box.item)
         }
+
+        proxy.pasteboardWriterForItem = { [weak self] item in
+            guard let self, let box = item as? ItemBox else { return nil }
+            guard box.item.isSidebarReorderable, let reorderID = box.item.sidebarReorderID else {
+                return nil
+            }
+            let pasteboardItem = NSPasteboardItem()
+            pasteboardItem.setString(reorderID, forType: self.dragPasteboardType)
+            return pasteboardItem
+        }
+
+        proxy.validateDrop = { [weak self] info, proposedItem, proposedChildIndex in
+            guard let self else { return [] }
+            return self.validateDrop(info: info, proposedItem: proposedItem, proposedChildIndex: proposedChildIndex)
+        }
+
+        proxy.acceptDrop = { [weak self] info, item, childIndex in
+            guard let self else { return false }
+            return self.acceptDrop(info: info, proposedItem: item, childIndex: childIndex)
+        }
+    }
+
+    private func draggedReorderID(from info: NSDraggingInfo) -> String? {
+        info.draggingPasteboard.string(forType: dragPasteboardType)
+    }
+
+    private func validateDrop(info: NSDraggingInfo, proposedItem: Any?, proposedChildIndex: Int) -> NSDragOperation {
+        guard proposedChildIndex != NSOutlineViewDropOnItemIndex else { return [] }
+        guard let sectionBox = proposedItem as? SectionBox else { return [] }
+        guard let reorderID = draggedReorderID(from: info) else { return [] }
+        guard let movingItem = item(forReorderID: reorderID), movingItem.isSidebarReorderable else { return [] }
+        guard movingItem.section == sectionBox.section else { return [] }
+        let sectionItems = items.filter { $0.section == sectionBox.section }
+        let reorderableCount = sectionItems.filter(\.isSidebarReorderable).count
+        return reorderableCount > 1 ? .move : []
+    }
+
+    private func acceptDrop(info: NSDraggingInfo, proposedItem: Any?, childIndex: Int) -> Bool {
+        guard childIndex != NSOutlineViewDropOnItemIndex else { return false }
+        guard let sectionBox = proposedItem as? SectionBox else { return false }
+        guard let reorderID = draggedReorderID(from: info) else { return false }
+        guard let movingItem = item(forReorderID: reorderID), movingItem.isSidebarReorderable else { return false }
+        guard movingItem.section == sectionBox.section else { return false }
+        guard let reordered = reorderedItemsInSection(movingReorderID: reorderID, section: sectionBox.section, destinationSectionIndex: childIndex) else {
+            return false
+        }
+
+        items = reordered
+        reloadData()
+        selectItem(where: { $0.sidebarReorderID == reorderID })
+        onItemsReordered?(reordered)
+        return true
+    }
+
+    private func item(forReorderID reorderID: String) -> Item? {
+        items.first { $0.sidebarReorderID == reorderID }
+    }
+
+    private func reorderedItemsInSection(
+        movingReorderID: String,
+        section: Section,
+        destinationSectionIndex: Int
+    ) -> [Item]? {
+        let sectionItems = items.filter { $0.section == section }
+        guard !sectionItems.isEmpty else { return nil }
+
+        let movingSectionIndex = sectionItems.firstIndex { $0.sidebarReorderID == movingReorderID }
+        guard let movingSectionIndex else { return nil }
+        let movingItem = sectionItems[movingSectionIndex]
+        guard movingItem.isSidebarReorderable else { return nil }
+
+        var reorderableItems = sectionItems.filter { $0.isSidebarReorderable && $0.sidebarReorderID != nil }
+        guard reorderableItems.count > 1 else { return nil }
+        guard let sourceReorderableIndex = reorderableItems.firstIndex(where: { $0.sidebarReorderID == movingReorderID }) else {
+            return nil
+        }
+
+        let clampedSectionDestination = max(0, min(destinationSectionIndex, sectionItems.count))
+        var destinationReorderableIndex = 0
+        if clampedSectionDestination > 0 {
+            for index in 0..<clampedSectionDestination {
+                let item = sectionItems[index]
+                if item.sidebarReorderID == movingReorderID {
+                    continue
+                }
+                if item.isSidebarReorderable, item.sidebarReorderID != nil {
+                    destinationReorderableIndex += 1
+                }
+            }
+        }
+        destinationReorderableIndex = max(0, min(destinationReorderableIndex, reorderableItems.count - 1))
+
+        let movingReorderableItem = reorderableItems.remove(at: sourceReorderableIndex)
+        reorderableItems.insert(movingReorderableItem, at: destinationReorderableIndex)
+
+        var reorderableIterator = reorderableItems.makeIterator()
+        let reorderedSectionItems = sectionItems.map { item -> Item in
+            if item.isSidebarReorderable, item.sidebarReorderID != nil {
+                return reorderableIterator.next() ?? item
+            }
+            return item
+        }
+
+        var groupedBySection = Dictionary(grouping: items, by: { $0.section })
+        groupedBySection[section] = reorderedSectionItems
+
+        var rebuilt: [Item] = []
+        for orderedSection in sections {
+            if let sectionItems = groupedBySection.removeValue(forKey: orderedSection) {
+                rebuilt.append(contentsOf: sectionItems)
+            }
+        }
+        for sectionItems in groupedBySection.values {
+            rebuilt.append(contentsOf: sectionItems)
+        }
+        return rebuilt
     }
 
     // MARK: - Cell factories
@@ -334,6 +454,9 @@ final class OutlineProxy: NSObject, NSOutlineViewDataSource, NSOutlineViewDelega
     var shouldSelectItem: ((Any) -> Bool)?
     var viewForItem: ((NSTableColumn?, Any) -> NSView?)?
     var selectionDidChange: ((Notification) -> Void)?
+    var pasteboardWriterForItem: ((Any) -> NSPasteboardWriting?)?
+    var validateDrop: ((NSDraggingInfo, Any?, Int) -> NSDragOperation)?
+    var acceptDrop: ((NSDraggingInfo, Any?, Int) -> Bool)?
 
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
         numberOfChildrenOfItem?(item) ?? 0
@@ -361,6 +484,28 @@ final class OutlineProxy: NSObject, NSOutlineViewDataSource, NSOutlineViewDelega
 
     func outlineViewSelectionDidChange(_ notification: Notification) {
         selectionDidChange?(notification)
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
+        pasteboardWriterForItem?(item)
+    }
+
+    func outlineView(
+        _ outlineView: NSOutlineView,
+        validateDrop info: NSDraggingInfo,
+        proposedItem item: Any?,
+        proposedChildIndex index: Int
+    ) -> NSDragOperation {
+        validateDrop?(info, item, index) ?? []
+    }
+
+    func outlineView(
+        _ outlineView: NSOutlineView,
+        acceptDrop info: NSDraggingInfo,
+        item: Any?,
+        childIndex index: Int
+    ) -> Bool {
+        acceptDrop?(info, item, index) ?? false
     }
 }
 
