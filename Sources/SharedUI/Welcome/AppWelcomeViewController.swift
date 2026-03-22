@@ -60,6 +60,7 @@ public final class AppWelcomeViewController: NSHostingController<AnyView> {
 
         let view = WhatsNewView(whatsNew: whatsNew)
         super.init(rootView: AnyView(view))
+        preferredContentSize = CGSize(width: 540, height: 660)
     }
 
     @available(*, unavailable)
