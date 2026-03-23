@@ -42,10 +42,9 @@ public enum ToolbarItemFactory {
         identifier: NSToolbarItem.Identifier,
         label: String,
         paletteLabel: String = "Toggle Inspector",
-        target: AnyObject?,
+        target: AnyObject? = nil,
         action: Selector,
         toolTip: String? = nil,
-        isBordered: Bool? = nil,
         accessibilityDescription: String = "Show or hide the inspector"
     ) -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: identifier)
@@ -54,11 +53,7 @@ public enum ToolbarItemFactory {
         item.image = NSImage(systemSymbolName: "sidebar.trailing", accessibilityDescription: accessibilityDescription)
         item.target = target
         item.action = action
-        item.autovalidates = false
         item.toolTip = toolTip
-        if let isBordered {
-            item.isBordered = isBordered
-        }
         return item
     }
 
