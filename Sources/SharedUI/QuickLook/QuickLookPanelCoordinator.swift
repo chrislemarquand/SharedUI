@@ -1,11 +1,21 @@
 import AppKit
 import Quartz
 
+private final class TitledPreviewItem: NSObject, QLPreviewItem {
+    let previewItemURL: URL?
+    let previewItemTitle: String?
+    init(url: URL, title: String?) {
+        self.previewItemURL = url
+        self.previewItemTitle = title
+    }
+}
+
 @MainActor
 public final class QuickLookPanelCoordinator<SourceID: Hashable>: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
     private var sourceItems: [SourceID] = []
-    private var displayItems: [NSURL] = []
+    private var displayItems: [any QLPreviewItem] = []
     private var displayToSource: [URL: SourceID] = [:]
+    private var panelItemTitle: String? = nil
     private var panelObservation: NSKeyValueObservation?
     private var lockedHeight: CGFloat?
 
@@ -26,9 +36,11 @@ public final class QuickLookPanelCoordinator<SourceID: Hashable>: NSObject, @pre
         sourceFrameForSource: ((SourceID) -> NSRect?)? = nil,
         selectionDidChange: ((SourceID) -> Void)? = nil,
         moveSelection: ((MoveCommandDirection) -> SourceID?)? = nil,
-        onWillClose: (() -> Void)? = nil
+        onWillClose: (() -> Void)? = nil,
+        itemTitle: String? = nil
     ) {
         self.sourceItems = sourceItems
+        self.panelItemTitle = itemTitle
         self.displayURLForSource = displayURLForSource
         self.sourceFrameForSource = sourceFrameForSource
         self.selectionDidChange = selectionDidChange
@@ -85,7 +97,7 @@ public final class QuickLookPanelCoordinator<SourceID: Hashable>: NSObject, @pre
         displayItems.count
     }
 
-    public func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
+    public func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> (any QLPreviewItem)! {
         guard displayItems.indices.contains(index) else { return nil }
         return displayItems[index]
     }
@@ -178,8 +190,10 @@ public final class QuickLookPanelCoordinator<SourceID: Hashable>: NSObject, @pre
         selectionDidChange?(sourceItems[index])
     }
 
-    private func sourceItem(for item: QLPreviewItem?) -> SourceID? {
-        guard let url = (item as? NSURL) as URL? ?? (item as? URL) else { return nil }
+    private func sourceItem(for item: (any QLPreviewItem)?) -> SourceID? {
+        let url = (item as? TitledPreviewItem)?.previewItemURL
+                ?? (item as? NSURL) as URL?
+        guard let url else { return nil }
         return displayToSource[url.standardizedFileURL]
     }
 
@@ -187,13 +201,17 @@ public final class QuickLookPanelCoordinator<SourceID: Hashable>: NSObject, @pre
         guard let displayURLForSource else { return }
         displayToSource.removeAll(keepingCapacity: true)
         var newSourceItems: [SourceID] = []
-        var newDisplayItems: [NSURL] = []
+        var newDisplayItems: [any QLPreviewItem] = []
         for source in sourceItems {
             guard let displayURL = displayURLForSource(source)?.standardizedFileURL else { continue }
             guard displayURL.isFileURL else { continue }
             guard !displayURL.path.isEmpty else { continue }
             newSourceItems.append(source)
-            newDisplayItems.append(displayURL as NSURL)
+            if panelItemTitle != nil {
+                newDisplayItems.append(TitledPreviewItem(url: displayURL, title: panelItemTitle))
+            } else {
+                newDisplayItems.append(displayURL as NSURL)
+            }
             displayToSource[displayURL] = source
         }
         sourceItems = newSourceItems
