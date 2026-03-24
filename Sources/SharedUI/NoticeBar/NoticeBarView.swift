@@ -4,6 +4,7 @@ import SwiftUI
 /// Intended to be hosted in an AppKit `NSHostingView` via `NoticeBar`.
 public struct NoticeBarView: View {
     @Bindable var state: NoticeBarState
+    @Environment(\.controlActiveState) private var controlActiveState
 
     public init(state: NoticeBarState) {
         self.state = state
@@ -13,8 +14,9 @@ public struct NoticeBarView: View {
         HStack(spacing: 8) {
             Text(state.message)
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
                 .lineLimit(1)
+                .padding(.leading, 8)
 
             Spacer()
 
@@ -22,14 +24,27 @@ public struct NoticeBarView: View {
                 Button(secondary.title) {
                     secondary.handler()
                 }
+                .buttonStyle(.bordered)
+                .tint(controlActiveState == .inactive ? Color(nsColor: .tertiaryLabelColor) : Color(nsColor: .secondaryLabelColor))
                 .controlSize(.small)
             }
 
             if let primary = state.primaryAction {
-                Button(primary.title) {
-                    primary.handler()
+                if controlActiveState == .inactive {
+                    Button(primary.title) {
+                        primary.handler()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(Color(nsColor: .tertiaryLabelColor))
+                    .controlSize(.small)
+                } else {
+                    Button(primary.title) {
+                        primary.handler()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.accentColor)
+                    .controlSize(.small)
                 }
-                .controlSize(.small)
             }
         }
         .padding(.horizontal, 12)
