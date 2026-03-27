@@ -22,8 +22,10 @@ import AppKit
 public final class ToolbarAppearanceAdapter {
     private var observation: NSKeyValueObservation?
     private var lastAppearanceName: NSAppearance.Name?
+    private let onChange: @MainActor () -> Void
 
-    public init(window: NSWindow, onChange: @escaping () -> Void) {
+    public init(window: NSWindow, onChange: @escaping @MainActor () -> Void) {
+        self.onChange = onChange
         lastAppearanceName = window.effectiveAppearance.name
         observation = window.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, change in
             let newName = change.newValue?.name
@@ -32,7 +34,9 @@ public final class ToolbarAppearanceAdapter {
                 guard let newName else { return }
                 guard self.lastAppearanceName != newName else { return }
                 self.lastAppearanceName = newName
-                onChange()
+                MainActor.assumeIsolated {
+                    self.onChange()
+                }
             }
         }
     }
