@@ -35,27 +35,6 @@ open class ThreePaneSplitViewController: NSSplitViewController {
     /// The inner split view — bind toolbar inspector tracking separator to dividerIndex 0.
     public var innerSplitView: NSSplitView { contentSplitController.splitView }
 
-    /// Installs a local key-down monitor that fires `onSpace` synchronously when the spacebar
-    /// is pressed with no blocking modifiers, focus is strictly within `contentView`'s subtree,
-    /// and no modal or sheet is active. Call once from `viewDidLoad`.
-    /// The monitor is removed automatically in `viewWillDisappear`.
-    public func installContentKeyboardMonitor(contentView: NSView, onSpace: @escaping () -> Void) {
-        removeContentKeyboardMonitor()
-        contentKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
-            guard event.keyCode == KeyCode.space,
-                  event.modifierFlags.intersection([.command, .control, .option, .function]).isEmpty,
-                  !event.isARepeat
-            else { return event }
-            guard self.canHandleContentShortcuts() else { return event }
-            guard let responder = self.view.window?.firstResponder as? NSView else { return event }
-            if let textView = responder as? NSTextView, textView.isEditable { return event }
-            guard responder === contentView || responder.isDescendant(of: contentView) else { return event }
-            onSpace()
-            return nil
-        }
-    }
-
     /// Coalesced pane state sync — safe to call multiple times in the same run loop pass.
     public func schedulePaneStateSync() {
         guard !isPaneStateSyncScheduled else { return }
@@ -93,8 +72,6 @@ open class ThreePaneSplitViewController: NSSplitViewController {
     private var isPaneStateSyncScheduled = false
     private var didApplyInitialContentSplit = false
     private var didApplyInitialInspectorVisibility = false
-
-    private var contentKeyMonitor: Any?
 
     private let mainAutosaveName: String
     private let contentAutosaveName: String
@@ -186,7 +163,6 @@ open class ThreePaneSplitViewController: NSSplitViewController {
         super.viewWillDisappear()
         splitResizeObservers.forEach { NotificationCenter.default.removeObserver($0) }
         splitResizeObservers = []
-        removeContentKeyboardMonitor()
     }
 
     // MARK: - Inspector toggle
@@ -205,21 +181,6 @@ open class ThreePaneSplitViewController: NSSplitViewController {
     }
 
     // MARK: - Private
-
-    private func removeContentKeyboardMonitor() {
-        if let monitor = contentKeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            contentKeyMonitor = nil
-        }
-    }
-
-    private func canHandleContentShortcuts() -> Bool {
-        guard let window = view.window else { return false }
-        guard NSApp.modalWindow == nil else { return false }
-        guard window.attachedSheet == nil else { return false }
-        guard let keyWindow = NSApp.keyWindow else { return false }
-        return keyWindow === window
-    }
 
     private func installSplitResizeObserver() {
         guard splitResizeObservers.isEmpty else { return }
