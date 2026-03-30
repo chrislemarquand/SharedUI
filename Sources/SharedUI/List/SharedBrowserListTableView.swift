@@ -26,4 +26,12 @@ public final class SharedBrowserListTableView: NSTableView {
 
         super.keyDown(with: event)
     }
+
+    public override func insertNewline(_ sender: Any?) {
+        onActivateSelection?()
+    }
+
+    public override func insertNewlineIgnoringFieldEditor(_ sender: Any?) {
+        onActivateSelection?()
+    }
 }
