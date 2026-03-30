@@ -38,7 +38,7 @@ public struct InspectorRatingFlagView: View {
 
     public var body: some View {
         if ratingEnabled || pickEnabled || labelEnabled {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 if ratingEnabled {
                     ratingRow
                 }
