@@ -34,10 +34,10 @@ Work needed:
 
 Ledger's roadmap calls for a full native QuickLook rewrite in v1.3/v1.5. If that rewrite uses `QuickLookPanelCoordinator` as the foundation (currently Ledger uses a separate preview path), `QuickLookPanelCoordinator` may need extension to support Ledger's additional requirements (e.g., list-view navigation semantics, broader content type support). Track here if coordinator changes are needed.
 
-### Ledger sidebar migration to AppKit
-*(Sourced from: Ledger roadmap — v2.0)*
+### Sidebar inactive-window label colour
+*(Sourced from: observed in both Ledger and Librarian)*
 
-Ledger's v2.0 plans to rewrite its sidebar in AppKit. When that happens, `AppKitSidebarController` is the natural home. The controller may need extension for features Ledger requires that Librarian does not (drag to reorder, drag a folder onto the sidebar). Track those extensions here when they are specified.
+When a window loses focus, sidebar SF Symbol icons correctly grey out but item label text stays black instead of dimming to match. Native macOS sidebars dim both. Investigation suggests `SidebarCellView.backgroundStyle` correctly calls `super` and does not manually set `textField.textColor`, so the root cause is not obvious from the code — it may be that AppKit's automatic propagation of `backgroundStyle` to the text field is not firing for unselected rows on key-window transitions in the current macOS version. Needs further investigation and testing.
 
 ### Gallery metadata subtitle customisation
 *(Sourced from: Ledger roadmap — v1.3)*
@@ -48,6 +48,9 @@ Ledger plans per-item metadata subtitle customisation in the gallery. If the sub
 
 ## Completed
 
+- **[Done] InspectorRatingFlagView** — Star rating (0–5), three-way pick/flag cycle (unflagged/picked/rejected), and colour label menu. Generic widget taking values and callbacks; wired to Ledger's pending-edits model. NSColor.system* colours, NSImage drawn circles to avoid macOS template rendering in menu items.
+- **[Done] InspectorHeaderView pending change indicator** — `pendingChange: Bool` parameter added; shows orange dot before title when a staged rename is pending. Used by Ledger v1.2 to indicate batch rename state.
+- **[Done] Ledger sidebar migration to AppKit** — Ledger now uses `AppKitSidebarController` (`LedgerSidebarTypes.swift`). The planned extensions (drag to reorder) were not needed at migration time.
 - **[Done] Quick Look keyboard monitor** — `installContentKeyboardMonitor(contentView:onSpace:)` added to `ThreePaneSplitViewController` (v1.0.3). Spacebar handling extracted from Ledger; both apps now use the shared implementation.
 - **[Done] Gallery context-menu selection infrastructure** — `ContextMenuSupport` extracted with `targetSelection` and `makeMenuItem` (v1.0.3). Both apps consume from SharedUI; app-specific menu item actions remain local.
 - **[Done] QuickLookPanelCoordinator** — Generic coordinator with direct data source/delegate assignment, arrow key navigation, selection sync, and initial panel sizing (v1.0.1).
