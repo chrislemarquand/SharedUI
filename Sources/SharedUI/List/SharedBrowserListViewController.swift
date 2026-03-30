@@ -133,7 +133,6 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         tableView.allowsColumnResizing = true
         tableView.allowsMultipleSelection = true
         tableView.allowsEmptySelection = true
-        tableView.focusRingType = .none
         tableView.gridStyleMask = []
         tableView.backgroundColor = .clear
         tableView.selectionHighlightStyle = .regular
