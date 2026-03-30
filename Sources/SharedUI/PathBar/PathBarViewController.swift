@@ -14,7 +14,7 @@ public final class PathBarViewController: NSViewController {
     // MARK: - Public interface
 
     /// The height to use when adding this view to a parent layout.
-    public static let preferredHeight: CGFloat = 24
+    public static let preferredHeight: CGFloat = 32
 
     /// The path to display. Set to `nil` to show `placeholderString`.
     public var url: URL? {
@@ -26,9 +26,6 @@ public final class PathBarViewController: NSViewController {
         didSet { pathControl.placeholderString = placeholderString }
     }
 
-    /// Called when the user clicks a path component. The argument is the
-    /// clicked component's URL.
-    public var onItemClicked: ((URL) -> Void)?
 
     // MARK: - Private
 
@@ -51,9 +48,9 @@ public final class PathBarViewController: NSViewController {
         pathControl.pathStyle = .standard
         pathControl.isEditable = false
         pathControl.focusRingType = .none
+        pathControl.controlSize = .small
+        pathControl.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         pathControl.translatesAutoresizingMaskIntoConstraints = false
-        pathControl.action = #selector(pathControlClicked(_:))
-        pathControl.target = self
         view.addSubview(pathControl)
 
         NSLayoutConstraint.activate([
@@ -62,17 +59,11 @@ public final class PathBarViewController: NSViewController {
             separator.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             separator.heightAnchor.constraint(equalToConstant: 1),
 
-            pathControl.topAnchor.constraint(equalTo: separator.bottomAnchor),
-            pathControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
-            pathControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
-            pathControl.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            // Centre the small control in the available space below the separator.
+            pathControl.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: 0.5),
+            pathControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            pathControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
         ])
     }
 
-    // MARK: - Actions
-
-    @objc private func pathControlClicked(_ sender: NSPathControl) {
-        guard let url = sender.clickedPathItem?.url else { return }
-        onItemClicked?(url)
-    }
 }
