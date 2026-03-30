@@ -18,6 +18,19 @@ public protocol SharedBrowserListHosting: AnyObject {
         _ controller: SharedBrowserListViewController,
         descriptor: NSSortDescriptor?
     )
+    func sharedBrowserListColumnVisibilityDidChange(
+        _ controller: SharedBrowserListViewController,
+        columnID: String,
+        isVisible: Bool
+    )
+}
+
+public extension SharedBrowserListHosting {
+    func sharedBrowserListColumnVisibilityDidChange(
+        _: SharedBrowserListViewController,
+        columnID _: String,
+        isVisible _: Bool
+    ) {}
 }
 
 @MainActor
@@ -29,14 +42,24 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
 
     private let columns: [SharedListColumnDefinition]
     private let persistence: SharedListPersistenceConfig
+    private let layoutConfig: SharedListLayoutConfig
     private var columnStore: SharedListColumnStore
+    private var isInColumnOverflow = false
+    private var isApplyingProgrammaticSort = false
+
+    public var onBackgroundClick: (() -> Void)?
+    public var onModifiedRowClick: ((Int, NSEvent.ModifierFlags) -> Void)?
+    public var contextMenuProvider: ((Int) -> NSMenu?)?
+    public var onActivateSelection: (() -> Void)?
 
     public init(
         columns: [SharedListColumnDefinition],
-        persistence: SharedListPersistenceConfig
+        persistence: SharedListPersistenceConfig,
+        layoutConfig: SharedListLayoutConfig
     ) {
         self.columns = columns
         self.persistence = persistence
+        self.layoutConfig = layoutConfig
         self.columnStore = SharedListColumnStore(
             visibleKey: persistence.visibilityDefaultsKey,
             initialFitKey: persistence.initialFitDefaultsKey
@@ -56,16 +79,49 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     public override func viewDidLoad() {
         super.viewDidLoad()
         configureList()
+        updateListPresentationState(hasItems: (host?.numberOfRows(in: self) ?? 0) > 0)
+    }
+
+    public override func viewDidLayout() {
+        super.viewDidLayout()
+        syncTableWidthToViewportIfNeeded()
+        applyInitialColumnFitIfNeeded()
+        exitOverflowIfViewportFits()
+        updateListPresentationState(hasItems: tableView.numberOfRows > 0)
+    }
+
+    public override func viewDidAppear() {
+        super.viewDidAppear()
+        syncTableWidthToViewportIfNeeded()
+        applyInitialColumnFitIfNeeded()
     }
 
     public func reloadData() {
         tableView.reloadData()
+        syncTableWidthToViewportIfNeeded()
+        applyInitialColumnFitIfNeeded()
+        updateListPresentationState(hasItems: tableView.numberOfRows > 0)
+    }
+
+    public func setSortDescriptor(_ descriptor: NSSortDescriptor?) {
+        guard tableView.sortDescriptors.first != descriptor else { return }
+        isApplyingProgrammaticSort = true
+        if let descriptor {
+            tableView.sortDescriptors = [descriptor]
+        } else {
+            tableView.sortDescriptors = []
+        }
+        isApplyingProgrammaticSort = false
+    }
+
+    public func refreshColumnHeaderMenu() {
+        tableView.headerView?.menu = buildColumnHeaderMenu()
     }
 
     private func configureList() {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
+        scrollView.hasHorizontalScroller = layoutConfig.hasHorizontalScroller
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
@@ -74,6 +130,7 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         tableView.frame = NSRect(origin: .zero, size: scrollView.contentView.bounds.size)
         tableView.autoresizingMask = [.width]
         tableView.usesAutomaticRowHeights = false
+        tableView.rowHeight = layoutConfig.rowHeight
         tableView.headerView = NSTableHeaderView()
         tableView.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
         tableView.allowsColumnResizing = true
@@ -86,12 +143,25 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         tableView.delegate = self
         tableView.dataSource = self
 
+        tableView.onBackgroundClick = { [weak self] in
+            self?.onBackgroundClick?()
+        }
+        tableView.onModifiedRowClick = { [weak self] row, modifiers in
+            self?.onModifiedRowClick?(row, modifiers)
+        }
+        tableView.contextMenuProvider = { [weak self] row in
+            self?.contextMenuProvider?(row)
+        }
+        tableView.onActivateSelection = { [weak self] in
+            self?.onActivateSelection?()
+        }
+
         for definition in columns {
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(definition.id))
             column.title = definition.title
             column.minWidth = definition.minWidth
             column.width = definition.defaultWidth
-            column.resizingMask = definition.id == columns.first?.id
+            column.resizingMask = definition.id == layoutConfig.primaryColumnID
                 ? [.autoresizingMask, .userResizingMask]
                 : .userResizingMask
             if definition.isSortable {
@@ -107,6 +177,7 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
                 column.isHidden = !columnStore.isVisible(definition)
             }
         }
+        tableView.headerView?.menu = buildColumnHeaderMenu()
 
         scrollView.documentView = tableView
         view.addSubview(scrollView)
@@ -116,6 +187,131 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+    }
+
+    private func buildColumnHeaderMenu() -> NSMenu {
+        let menu = NSMenu()
+        let builtInToggleable = columns.filter { $0.isToggleable && $0.group == .builtIn }
+        let metadataToggleable = columns.filter { $0.isToggleable && $0.group == .metadata }
+
+        for definition in builtInToggleable {
+            menu.addItem(makeColumnMenuItem(for: definition))
+        }
+        if !builtInToggleable.isEmpty, !metadataToggleable.isEmpty {
+            menu.addItem(.separator())
+        }
+        for definition in metadataToggleable {
+            menu.addItem(makeColumnMenuItem(for: definition))
+        }
+        return menu
+    }
+
+    private func makeColumnMenuItem(for definition: SharedListColumnDefinition) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: definition.title,
+            action: #selector(toggleColumnFromHeader(_:)),
+            keyEquivalent: ""
+        )
+        item.target = self
+        item.representedObject = definition.id
+        let isVisible = tableView.tableColumns
+            .first(where: { $0.identifier.rawValue == definition.id })
+            .map { !$0.isHidden } ?? definition.defaultIsVisible
+        item.state = isVisible ? .on : .off
+        return item
+    }
+
+    @objc private func toggleColumnFromHeader(_ sender: NSMenuItem) {
+        guard let columnID = sender.representedObject as? String,
+              let column = tableView.tableColumns.first(where: { $0.identifier.rawValue == columnID }),
+              let definition = columns.first(where: { $0.id == columnID && $0.isToggleable })
+        else { return }
+
+        let newVisible = column.isHidden
+        column.isHidden = !newVisible
+        sender.state = newVisible ? .on : .off
+        columnStore.setVisible(columnID, newVisible, allDefinitions: columns)
+        adjustTableForColumnToggle()
+        host?.sharedBrowserListColumnVisibilityDidChange(self, columnID: definition.id, isVisible: newVisible)
+    }
+
+    private func updateListPresentationState(hasItems: Bool) {
+        tableView.usesAlternatingRowBackgroundColors = hasItems
+        tableView.headerView?.isHidden = !hasItems
+    }
+
+    private func syncTableWidthToViewportIfNeeded() {
+        guard !isInColumnOverflow else { return }
+        let width = scrollView.contentView.bounds.width
+        guard width > 0 else { return }
+        if abs(tableView.frame.width - width) > 0.5 {
+            var frame = tableView.frame
+            frame.size.width = width
+            tableView.frame = frame
+        }
+    }
+
+    private func applyInitialColumnFitIfNeeded() {
+        guard !columnStore.hasAppliedInitialFit else { return }
+        guard let primaryColumn = tableView.tableColumns.first(where: {
+            $0.identifier.rawValue == layoutConfig.primaryColumnID
+        }) else { return }
+        let viewportWidth = scrollView.contentView.bounds.width
+        guard viewportWidth > 0 else { return }
+        let visibleNonPrimary = tableView.tableColumns.filter {
+            $0.identifier.rawValue != layoutConfig.primaryColumnID && !$0.isHidden
+        }
+        let fixedWidth = visibleNonPrimary.reduce(0.0) { $0 + $1.width }
+        primaryColumn.width = max(primaryColumn.minWidth, floor(viewportWidth - fixedWidth))
+        tableView.tile()
+        columnStore.hasAppliedInitialFit = true
+    }
+
+    private func adjustTableForColumnToggle() {
+        let viewportWidth = scrollView.contentView.bounds.width
+        guard viewportWidth > 0 else { return }
+        guard let primaryColumn = tableView.tableColumns.first(where: {
+            $0.identifier.rawValue == layoutConfig.primaryColumnID
+        }) else { return }
+        let nonPrimary = tableView.tableColumns.filter {
+            !$0.isHidden && $0.identifier.rawValue != layoutConfig.primaryColumnID
+        }
+        let othersWidth = nonPrimary.reduce(0.0) { $0 + $1.width }
+        let minTotal = othersWidth + primaryColumn.minWidth
+
+        if minTotal > viewportWidth {
+            isInColumnOverflow = true
+            tableView.autoresizingMask = []
+            primaryColumn.width = primaryColumn.minWidth
+            var frame = tableView.frame
+            frame.size.width = ceil(minTotal)
+            tableView.frame = frame
+        } else {
+            isInColumnOverflow = false
+            tableView.autoresizingMask = [.width]
+            primaryColumn.width = max(primaryColumn.minWidth, floor(viewportWidth - othersWidth))
+            syncTableWidthToViewportIfNeeded()
+        }
+        tableView.tile()
+    }
+
+    private func exitOverflowIfViewportFits() {
+        guard isInColumnOverflow else { return }
+        let viewportWidth = scrollView.contentView.bounds.width
+        guard viewportWidth > 0 else { return }
+        guard let primaryColumn = tableView.tableColumns.first(where: {
+            $0.identifier.rawValue == layoutConfig.primaryColumnID
+        }) else { return }
+        let nonPrimary = tableView.tableColumns.filter {
+            !$0.isHidden && $0.identifier.rawValue != layoutConfig.primaryColumnID
+        }
+        let othersWidth = nonPrimary.reduce(0.0) { $0 + $1.width }
+        guard othersWidth + primaryColumn.minWidth <= viewportWidth else { return }
+        isInColumnOverflow = false
+        tableView.autoresizingMask = [.width]
+        primaryColumn.width = max(primaryColumn.minWidth, floor(viewportWidth - othersWidth))
+        syncTableWidthToViewportIfNeeded()
+        tableView.tile()
     }
 
     public func numberOfRows(in _: NSTableView) -> Int {
@@ -135,7 +331,7 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     }
 
     public func tableView(_ tableView: NSTableView, sortDescriptorsDidChange _: [NSSortDescriptor]) {
+        guard !isApplyingProgrammaticSort else { return }
         host?.sharedBrowserListSortDidChange(self, descriptor: tableView.sortDescriptors.first)
     }
 }
-

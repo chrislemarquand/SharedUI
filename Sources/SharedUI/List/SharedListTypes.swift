@@ -1,5 +1,10 @@
 import AppKit
 
+public enum SharedListColumnGroup: Sendable, Hashable {
+    case builtIn
+    case metadata
+}
+
 public struct SharedListColumnDefinition: Sendable, Hashable {
     public let id: String
     public let title: String
@@ -7,6 +12,8 @@ public struct SharedListColumnDefinition: Sendable, Hashable {
     public let minWidth: CGFloat
     public let defaultIsVisible: Bool
     public let isSortable: Bool
+    public let isToggleable: Bool
+    public let group: SharedListColumnGroup
 
     public init(
         id: String,
@@ -14,7 +21,9 @@ public struct SharedListColumnDefinition: Sendable, Hashable {
         defaultWidth: CGFloat,
         minWidth: CGFloat,
         defaultIsVisible: Bool,
-        isSortable: Bool
+        isSortable: Bool,
+        isToggleable: Bool = true,
+        group: SharedListColumnGroup = .metadata
     ) {
         self.id = id
         self.title = title
@@ -22,6 +31,8 @@ public struct SharedListColumnDefinition: Sendable, Hashable {
         self.minWidth = minWidth
         self.defaultIsVisible = defaultIsVisible
         self.isSortable = isSortable
+        self.isToggleable = isToggleable
+        self.group = group
     }
 }
 
@@ -51,3 +62,18 @@ public struct SharedListPersistenceConfig: Sendable, Hashable {
     }
 }
 
+public struct SharedListLayoutConfig: Sendable, Hashable {
+    public let primaryColumnID: String
+    public let rowHeight: CGFloat
+    public let hasHorizontalScroller: Bool
+
+    public init(
+        primaryColumnID: String,
+        rowHeight: CGFloat,
+        hasHorizontalScroller: Bool = true
+    ) {
+        self.primaryColumnID = primaryColumnID
+        self.rowHeight = rowHeight
+        self.hasHorizontalScroller = hasHorizontalScroller
+    }
+}
