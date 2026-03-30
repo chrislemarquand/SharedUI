@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 public struct InspectorRatingFlagView: View {
@@ -81,6 +82,7 @@ public struct InspectorRatingFlagView: View {
             Image(systemName: pickSymbol)
                 .font(.system(size: 14))
                 .foregroundStyle(pickPending ? Color.orange : Color.primary)
+                .frame(width: 18, height: 18)
         }
         .buttonStyle(.plain)
     }
@@ -95,38 +97,35 @@ public struct InspectorRatingFlagView: View {
 
     private var labelMenu: some View {
         Menu {
-            Button { onLabelChange("") } label: { Label("None", systemImage: "xmark") }
+            Button { onLabelChange("") } label: {
+                Label {
+                    Text("None")
+                } icon: {
+                    Image(systemName: "circle.dotted")
+                }
+            }
             Divider()
-            Button { onLabelChange("Red") } label: {
-                Label { Text("Red") } icon: {
-                    Image(systemName: "circle.fill").foregroundStyle(Color.red)
-                }
-            }
-            Button { onLabelChange("Yellow") } label: {
-                Label { Text("Yellow") } icon: {
-                    Image(systemName: "circle.fill").foregroundStyle(Color.yellow)
-                }
-            }
-            Button { onLabelChange("Green") } label: {
-                Label { Text("Green") } icon: {
-                    Image(systemName: "circle.fill").foregroundStyle(Color.green)
-                }
-            }
-            Button { onLabelChange("Blue") } label: {
-                Label { Text("Blue") } icon: {
-                    Image(systemName: "circle.fill").foregroundStyle(Color.blue)
-                }
-            }
-            Button { onLabelChange("Purple") } label: {
-                Label { Text("Purple") } icon: {
-                    Image(systemName: "circle.fill").foregroundStyle(Color.purple)
-                }
-            }
+            Button { onLabelChange("Red") }    label: { Label { Text("Red")    } icon: { colorCircleImage(.red)    } }
+            Button { onLabelChange("Yellow") } label: { Label { Text("Yellow") } icon: { colorCircleImage(.yellow) } }
+            Button { onLabelChange("Green") }  label: { Label { Text("Green")  } icon: { colorCircleImage(.green)  } }
+            Button { onLabelChange("Blue") }   label: { Label { Text("Blue")   } icon: { colorCircleImage(.blue)   } }
+            Button { onLabelChange("Purple") } label: { Label { Text("Purple") } icon: { colorCircleImage(.purple) } }
         } label: {
             labelIndicator
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+    }
+
+    private func colorCircleImage(_ nsColor: NSColor) -> Image {
+        let size = CGSize(width: 14, height: 14)
+        let nsImage = NSImage(size: size, flipped: false) { rect in
+            nsColor.setFill()
+            NSBezierPath(ovalIn: rect).fill()
+            return true
+        }
+        nsImage.isTemplate = false
+        return Image(nsImage: nsImage)
     }
 
     @ViewBuilder
