@@ -98,7 +98,7 @@ public struct InspectorRatingFlagView: View {
     private var labelMenu: some View {
         Menu {
             Button { onLabelChange("") } label: {
-                Label { Text("None") } icon: { noneCircleImage }
+                Label { Text("None") } icon: { noneCircleImage() }
             }
             Divider()
             Button { onLabelChange("Red") }    label: { Label { Text("Red")    } icon: { colorCircleImage(.systemRed)    } }
@@ -117,9 +117,7 @@ public struct InspectorRatingFlagView: View {
     private var labelIndicator: some View {
         ZStack {
             if label.isEmpty {
-                Image(systemName: "circle.dotted")
-                    .font(.system(size: 16))
-                    .foregroundStyle(labelPending ? Color.orange : Color.secondary)
+                noneCircleImage(size: 16, strokeColor: labelPending ? .systemOrange : .secondaryLabelColor)
             } else {
                 colorCircleImage(nsLabelColor, size: 16)
                 if labelPending {
@@ -154,14 +152,14 @@ public struct InspectorRatingFlagView: View {
         return Image(nsImage: nsImage)
     }
 
-    private var noneCircleImage: Image {
-        let size = CGSize(width: 14, height: 14)
-        let nsImage = NSImage(size: size, flipped: false) { rect in
+    private func noneCircleImage(size: CGFloat = 14, strokeColor: NSColor = .secondaryLabelColor) -> Image {
+        let cgSize = CGSize(width: size, height: size)
+        let nsImage = NSImage(size: cgSize, flipped: false) { rect in
             let inset = rect.insetBy(dx: 1.5, dy: 1.5)
             let path = NSBezierPath(ovalIn: inset)
             path.lineWidth = 1.5
             path.setLineDash([2.5, 2], count: 2, phase: 0)
-            NSColor.secondaryLabelColor.setStroke()
+            strokeColor.setStroke()
             path.stroke()
             return true
         }
