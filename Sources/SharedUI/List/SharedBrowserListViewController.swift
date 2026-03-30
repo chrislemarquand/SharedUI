@@ -47,8 +47,6 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     private var isInColumnOverflow = false
     private var isApplyingProgrammaticSort = false
 
-    public var onBackgroundClick: (() -> Void)?
-    public var onModifiedRowClick: ((Int, NSEvent.ModifierFlags) -> Void)?
     public var contextMenuProvider: ((Int) -> NSMenu?)?
     public var onActivateSelection: (() -> Void)?
 
@@ -143,12 +141,6 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         tableView.delegate = self
         tableView.dataSource = self
 
-        tableView.onBackgroundClick = { [weak self] in
-            self?.onBackgroundClick?()
-        }
-        tableView.onModifiedRowClick = { [weak self] row, modifiers in
-            self?.onModifiedRowClick?(row, modifiers)
-        }
         tableView.contextMenuProvider = { [weak self] row in
             self?.contextMenuProvider?(row)
         }
