@@ -34,7 +34,7 @@ public final class InspectorFieldSettingsViewController: NSViewController {
 
     private let scrollView = NSScrollView()
     private let contentView = FlippedView()
-    private let contentStack = NSStackView()
+    private var currentGrid: NSGridView?
 
     private var fieldByButtonID: [ObjectIdentifier: String] = [:]
     private var sectionByButtonID: [ObjectIdentifier: String] = [:]
@@ -80,19 +80,6 @@ public final class InspectorFieldSettingsViewController: NSViewController {
         scrollView.borderType = .noBorder
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        contentStack.translatesAutoresizingMaskIntoConstraints = false
-        contentStack.orientation = .vertical
-        contentStack.alignment = .leading
-        contentStack.spacing = 16
-
-        contentView.addSubview(contentStack)
-        NSLayoutConstraint.activate([
-            contentStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            contentStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
-            contentStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            contentStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
-            contentStack.widthAnchor.constraint(equalTo: contentView.widthAnchor, constant: -48),
-        ])
 
         scrollView.documentView = contentView
         view.addSubview(scrollView)
@@ -102,6 +89,7 @@ public final class InspectorFieldSettingsViewController: NSViewController {
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
         ])
     }
 
@@ -112,12 +100,25 @@ public final class InspectorFieldSettingsViewController: NSViewController {
         fieldTogglesBySection.removeAll()
         sectionForFieldID.removeAll()
 
-        for arranged in contentStack.arrangedSubviews {
-            contentStack.removeArrangedSubview(arranged)
-            arranged.removeFromSuperview()
-        }
+        currentGrid?.removeFromSuperview()
+        currentGrid = nil
 
-        for section in sectionsProvider() {
+        let sections = sectionsProvider()
+        guard !sections.isEmpty else { return }
+
+        let grid = NSGridView()
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        grid.rowSpacing = 6
+        grid.columnSpacing = 16
+
+        for (sectionIndex, section) in sections.enumerated() {
+            // Gap row between sections for visual separation.
+            if sectionIndex > 0 {
+                let gapRow = grid.addRow(with: [NSGridCell.emptyContentView, NSGridCell.emptyContentView])
+                gapRow.height = 8
+            }
+
+            // Section header — merged across both columns.
             let sectionToggle = NSButton(
                 checkboxWithTitle: section.title,
                 target: self,
@@ -126,52 +127,67 @@ public final class InspectorFieldSettingsViewController: NSViewController {
             sectionToggle.font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
             sectionToggle.translatesAutoresizingMaskIntoConstraints = false
 
-            let enabledCount = section.fields.reduce(into: 0) { partial, field in
-                if field.isEnabled { partial += 1 }
-            }
+            let enabledCount = section.fields.reduce(into: 0) { $0 += $1.isEnabled ? 1 : 0 }
             sectionToggle.allowsMixedState = true
-            if enabledCount == 0 {
-                sectionToggle.state = .off
-            } else if enabledCount == section.fields.count {
-                sectionToggle.state = .on
-            } else {
-                sectionToggle.state = .mixed
-            }
+            sectionToggle.state = enabledCount == 0 ? .off : (enabledCount == section.fields.count ? .on : .mixed)
 
             sectionByButtonID[ObjectIdentifier(sectionToggle)] = section.title
             sectionToggleBySection[section.title] = sectionToggle
 
-            let fieldStack = NSStackView()
-            fieldStack.orientation = .vertical
-            fieldStack.alignment = .leading
-            fieldStack.spacing = 8
-            fieldStack.translatesAutoresizingMaskIntoConstraints = false
+            let headerRow = grid.addRow(with: [sectionToggle, NSGridCell.emptyContentView])
+            headerRow.mergeCells(in: NSRange(location: 0, length: 2))
 
+            // Field rows — two per row, left then right.
+            // Left column is wrapped with a 20pt leading indent so field checkboxes
+            // align with the section header's text label.
             var togglesForSection: [NSButton] = []
-            for field in section.fields {
-                let fieldToggle = NSButton(
-                    checkboxWithTitle: field.label,
-                    target: self,
-                    action: #selector(fieldToggled(_:))
-                )
-                fieldToggle.state = field.isEnabled ? .on : .off
-                fieldToggle.translatesAutoresizingMaskIntoConstraints = false
-                fieldByButtonID[ObjectIdentifier(fieldToggle)] = field.id
-                sectionForFieldID[field.id] = section.title
-                togglesForSection.append(fieldToggle)
-                fieldStack.addArrangedSubview(fieldToggle)
+            var i = 0
+            while i < section.fields.count {
+                let left = makeFieldToggle(section.fields[i], sectionTitle: section.title)
+                togglesForSection.append(left)
+                let right: NSView
+                if i + 1 < section.fields.count {
+                    let r = makeFieldToggle(section.fields[i + 1], sectionTitle: section.title)
+                    togglesForSection.append(r)
+                    right = r
+                } else {
+                    right = NSGridCell.emptyContentView
+                }
+                grid.addRow(with: [indented(left), right])
+                i += 2
             }
             fieldTogglesBySection[section.title] = togglesForSection
-
-            let sectionGroup = NSStackView(views: [sectionToggle, fieldStack])
-            sectionGroup.orientation = .vertical
-            sectionGroup.alignment = .leading
-            sectionGroup.spacing = 8
-            sectionGroup.translatesAutoresizingMaskIntoConstraints = false
-            sectionGroup.setCustomSpacing(6, after: sectionToggle)
-            fieldStack.leadingAnchor.constraint(equalTo: sectionGroup.leadingAnchor, constant: 20).isActive = true
-            contentStack.addArrangedSubview(sectionGroup)
         }
+
+        contentView.addSubview(grid)
+        NSLayoutConstraint.activate([
+            grid.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            grid.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            grid.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
+        ])
+        currentGrid = grid
+    }
+
+    private func indented(_ view: NSView) -> NSView {
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(view)
+        NSLayoutConstraint.activate([
+            view.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            view.topAnchor.constraint(equalTo: container.topAnchor),
+            view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+        return container
+    }
+
+    private func makeFieldToggle(_ field: InspectorFieldSettingsField, sectionTitle: String) -> NSButton {
+        let toggle = NSButton(checkboxWithTitle: field.label, target: self, action: #selector(fieldToggled(_:)))
+        toggle.state = field.isEnabled ? .on : .off
+        toggle.translatesAutoresizingMaskIntoConstraints = false
+        fieldByButtonID[ObjectIdentifier(toggle)] = field.id
+        sectionForFieldID[field.id] = sectionTitle
+        return toggle
     }
 
     private func recalculateSectionToggleState(for section: String) {

@@ -6,17 +6,21 @@ public struct SettingsTabDescriptor {
     public let viewController: NSViewController
     /// Pass a fixed height for scrollable panes; nil uses fittingSize.
     public let preferredHeight: CGFloat?
+    /// Pass a fixed width for this tab; nil uses contentWidth.
+    public let preferredWidth: CGFloat?
 
     public init(
         symbolName: String,
         label: String,
         viewController: NSViewController,
-        preferredHeight: CGFloat? = nil
+        preferredHeight: CGFloat? = nil,
+        preferredWidth: CGFloat? = nil
     ) {
         self.symbolName = symbolName
         self.label = label
         self.viewController = viewController
         self.preferredHeight = preferredHeight
+        self.preferredWidth = preferredWidth
     }
 }
 
@@ -30,9 +34,10 @@ public final class SettingsWindowController: NSWindowController {
         let window = NSWindow(contentViewController: tabsController)
         window.title = tabs.first?.label ?? "Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: Self.contentWidth, height: 100))
-        window.minSize = NSSize(width: Self.contentWidth, height: 100)
-        window.maxSize = NSSize(width: Self.contentWidth, height: 1200)
+        let initialWidth = tabs.first?.preferredWidth ?? Self.contentWidth
+        window.setContentSize(NSSize(width: initialWidth, height: 100))
+        window.minSize = NSSize(width: initialWidth, height: 100)
+        window.maxSize = NSSize(width: initialWidth, height: 1200)
         window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
         super.init(window: window)
@@ -93,6 +98,8 @@ private final class SettingsTabViewController: NSTabViewController {
         title = tab.label
         window.title = tab.label
 
+        let targetContentWidth = tab.preferredWidth ?? SettingsWindowController.contentWidth
+
         let targetContentHeight: CGFloat
         if let preferred = tab.preferredHeight {
             targetContentHeight = preferred
@@ -110,12 +117,17 @@ private final class SettingsTabViewController: NSTabViewController {
         let chromeHeight = frame.height - currentContentRect.height
         let maxContentHeight = (window.screen?.visibleFrame.height ?? 800) - chromeHeight
         let clampedContentHeight = min(targetContentHeight, maxContentHeight)
-        let delta = clampedContentHeight - currentContentRect.height
-        guard abs(delta) > 0.5 else { return }
+        let heightDelta = clampedContentHeight - currentContentRect.height
+        let widthDelta = targetContentWidth - currentContentRect.width
+        guard abs(heightDelta) > 0.5 || abs(widthDelta) > 0.5 else { return }
+
+        window.minSize = NSSize(width: targetContentWidth, height: 100)
+        window.maxSize = NSSize(width: targetContentWidth, height: 1200)
 
         var targetFrame = frame
-        targetFrame.size.height += delta
-        targetFrame.origin.y -= delta
+        targetFrame.size.width += widthDelta
+        targetFrame.size.height += heightDelta
+        targetFrame.origin.y -= heightDelta
         let constrainedFrame = window.constrainFrameRect(targetFrame, to: window.screen)
         window.setFrame(constrainedFrame, display: true, animate: animated)
     }
