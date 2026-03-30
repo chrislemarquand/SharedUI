@@ -48,7 +48,6 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     private var isApplyingProgrammaticSort = false
 
     public var contextMenuProvider: ((Int) -> NSMenu?)?
-    public var onActivateSelection: (() -> Void)?
 
     public init(
         columns: [SharedListColumnDefinition],
@@ -144,10 +143,6 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         tableView.contextMenuProvider = { [weak self] row in
             self?.contextMenuProvider?(row)
         }
-        tableView.onActivateSelection = { [weak self] in
-            self?.onActivateSelection?()
-        }
-
         for definition in columns {
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(definition.id))
             column.title = definition.title
