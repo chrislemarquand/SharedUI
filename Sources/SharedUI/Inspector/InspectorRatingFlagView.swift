@@ -69,8 +69,6 @@ public struct InspectorRatingFlagView: View {
         }
     }
 
-    // All three flag symbols are overlaid simultaneously so the bounding
-    // box is always the union of all three — eliminating layout shift.
     private var pickButton: some View {
         Button {
             let next: Int
@@ -81,18 +79,20 @@ public struct InspectorRatingFlagView: View {
             }
             onPickChange(next)
         } label: {
-            ZStack {
-                Image(systemName: "flag")
-                    .opacity(pick == 0 ? 1 : 0)
-                Image(systemName: "flag.fill")
-                    .opacity(pick == 1 ? 1 : 0)
-                Image(systemName: "flag.slash.fill")
-                    .opacity(pick == -1 ? 1 : 0)
-            }
-            .font(.system(size: 14))
-            .foregroundStyle(pickPending ? Color.orange : Color.primary)
+            Image(systemName: pickSymbol)
+                .font(.system(size: 14))
+                .foregroundStyle(pickPending ? Color.orange : Color.primary)
+                .frame(width: 18, height: 18)
         }
         .buttonStyle(.plain)
+    }
+
+    private var pickSymbol: String {
+        switch pick {
+        case 1:  return "flag.fill"
+        case -1: return "flag.slash.fill"
+        default: return "flag"
+        }
     }
 
     private var labelMenu: some View {
