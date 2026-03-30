@@ -15,11 +15,18 @@ public final class SharedGalleryCollectionView: NSCollectionView {
     override public func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let clickedIndexPath = indexPathForItem(at: point)
+        let hadSelectionBefore = !selectionIndexPaths.isEmpty
 
         super.mouseDown(with: event)
 
         guard let indexPath = clickedIndexPath else {
-            onBackgroundClick?()
+            // Preserve AppKit-native drag/rubber-band selection. Only treat this as a
+            // background clear when no items ended up selected after the interaction.
+            if selectionIndexPaths.isEmpty {
+                if hadSelectionBefore || event.clickCount == 1 {
+                    onBackgroundClick?()
+                }
+            }
             return
         }
 
