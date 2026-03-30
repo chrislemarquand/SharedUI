@@ -10,13 +10,26 @@ public enum KeyboardShortcutSupport {
         return keyWindow === window
     }
 
+    public static func responderOwningView(_ responder: NSResponder?) -> NSView? {
+        if let view = responder as? NSView {
+            return view
+        }
+        if let textView = responder as? NSTextView {
+            if let delegateView = textView.delegate as? NSView {
+                return delegateView
+            }
+            return textView.superview
+        }
+        return nil
+    }
+
     public static func isEditableTextResponder(_ responder: NSResponder?) -> Bool {
         guard let textView = responder as? NSTextView else { return false }
         return textView.isEditable
     }
 
     public static func isResponder(_ responder: NSResponder?, inside rootView: NSView) -> Bool {
-        guard let responderView = responder as? NSView else { return false }
+        guard let responderView = responderOwningView(responder) else { return false }
         return responderView === rootView || responderView.isDescendant(of: rootView)
     }
 

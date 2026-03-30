@@ -14,6 +14,7 @@ public enum BrowserKeyboardCommand: Equatable {
     case zoomOut
     case clearSelection
     case selectAllFiltered
+    case activateSelection
     case moveSelection(direction: MoveCommandDirection, extendingSelection: Bool)
     case extendSelectionToBoundary(towardStart: Bool)
 }
@@ -87,6 +88,9 @@ public enum BrowserKeyboardRouter {
         guard input.shouldHandleBrowserKeyCommands else { return .passthrough }
 
         switch input.keyCode {
+        case KeyCode.return, KeyCode.numpadReturn:
+            guard modifiers.isEmpty else { return .passthrough }
+            return .activateSelection
         case KeyCode.escape:
             guard modifiers.isEmpty else { return .passthrough }
             return .clearSelection
