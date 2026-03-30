@@ -69,6 +69,8 @@ public struct InspectorRatingFlagView: View {
         }
     }
 
+    // All three flag symbols are overlaid simultaneously so the bounding
+    // box is always the union of all three — eliminating layout shift.
     private var pickButton: some View {
         Button {
             let next: Int
@@ -79,53 +81,36 @@ public struct InspectorRatingFlagView: View {
             }
             onPickChange(next)
         } label: {
-            Image(systemName: pickSymbol)
-                .font(.system(size: 14))
-                .foregroundStyle(pickPending ? Color.orange : Color.primary)
-                .frame(width: 18, height: 18)
+            ZStack {
+                Image(systemName: "flag")
+                    .opacity(pick == 0 ? 1 : 0)
+                Image(systemName: "flag.fill")
+                    .opacity(pick == 1 ? 1 : 0)
+                Image(systemName: "flag.slash.fill")
+                    .opacity(pick == -1 ? 1 : 0)
+            }
+            .font(.system(size: 14))
+            .foregroundStyle(pickPending ? Color.orange : Color.primary)
         }
         .buttonStyle(.plain)
-    }
-
-    private var pickSymbol: String {
-        switch pick {
-        case 1:  return "flag.fill"
-        case -1: return "flag.slash.fill"
-        default: return "flag"
-        }
     }
 
     private var labelMenu: some View {
         Menu {
             Button { onLabelChange("") } label: {
-                Label {
-                    Text("None")
-                } icon: {
-                    Image(systemName: "circle.dotted")
-                }
+                Label { Text("None") } icon: { noneCircleImage }
             }
             Divider()
-            Button { onLabelChange("Red") }    label: { Label { Text("Red")    } icon: { colorCircleImage(.red)    } }
-            Button { onLabelChange("Yellow") } label: { Label { Text("Yellow") } icon: { colorCircleImage(.yellow) } }
-            Button { onLabelChange("Green") }  label: { Label { Text("Green")  } icon: { colorCircleImage(.green)  } }
-            Button { onLabelChange("Blue") }   label: { Label { Text("Blue")   } icon: { colorCircleImage(.blue)   } }
-            Button { onLabelChange("Purple") } label: { Label { Text("Purple") } icon: { colorCircleImage(.purple) } }
+            Button { onLabelChange("Red") }    label: { Label { Text("Red")    } icon: { colorCircleImage(.systemRed)    } }
+            Button { onLabelChange("Yellow") } label: { Label { Text("Yellow") } icon: { colorCircleImage(.systemYellow) } }
+            Button { onLabelChange("Green") }  label: { Label { Text("Green")  } icon: { colorCircleImage(.systemGreen)  } }
+            Button { onLabelChange("Blue") }   label: { Label { Text("Blue")   } icon: { colorCircleImage(.systemBlue)   } }
+            Button { onLabelChange("Purple") } label: { Label { Text("Purple") } icon: { colorCircleImage(.systemPurple) } }
         } label: {
             labelIndicator
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-    }
-
-    private func colorCircleImage(_ nsColor: NSColor) -> Image {
-        let size = CGSize(width: 14, height: 14)
-        let nsImage = NSImage(size: size, flipped: false) { rect in
-            nsColor.setFill()
-            NSBezierPath(ovalIn: rect).fill()
-            return true
-        }
-        nsImage.isTemplate = false
-        return Image(nsImage: nsImage)
     }
 
     @ViewBuilder
@@ -136,9 +121,7 @@ public struct InspectorRatingFlagView: View {
                     .font(.system(size: 16))
                     .foregroundStyle(labelPending ? Color.orange : Color.secondary)
             } else {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(labelColor)
+                colorCircleImage(nsLabelColor, size: 16)
                 if labelPending {
                     Image(systemName: "circle")
                         .font(.system(size: 18))
@@ -149,14 +132,40 @@ public struct InspectorRatingFlagView: View {
         .frame(width: 22, height: 22)
     }
 
-    private var labelColor: Color {
+    private var nsLabelColor: NSColor {
         switch label {
-        case "Red":    return .red
-        case "Yellow": return .yellow
-        case "Green":  return .green
-        case "Blue":   return .blue
-        case "Purple": return .purple
+        case "Red":    return .systemRed
+        case "Yellow": return .systemYellow
+        case "Green":  return .systemGreen
+        case "Blue":   return .systemBlue
+        case "Purple": return .systemPurple
         default:       return .clear
         }
+    }
+
+    private func colorCircleImage(_ nsColor: NSColor, size: CGFloat = 14) -> Image {
+        let cgSize = CGSize(width: size, height: size)
+        let nsImage = NSImage(size: cgSize, flipped: false) { rect in
+            nsColor.setFill()
+            NSBezierPath(ovalIn: rect).fill()
+            return true
+        }
+        nsImage.isTemplate = false
+        return Image(nsImage: nsImage)
+    }
+
+    private var noneCircleImage: Image {
+        let size = CGSize(width: 14, height: 14)
+        let nsImage = NSImage(size: size, flipped: false) { rect in
+            let inset = rect.insetBy(dx: 1.5, dy: 1.5)
+            let path = NSBezierPath(ovalIn: inset)
+            path.lineWidth = 1.5
+            path.setLineDash([2.5, 2], count: 2, phase: 0)
+            NSColor.secondaryLabelColor.setStroke()
+            path.stroke()
+            return true
+        }
+        nsImage.isTemplate = false
+        return Image(nsImage: nsImage)
     }
 }
