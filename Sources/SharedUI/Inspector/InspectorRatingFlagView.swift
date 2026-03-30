@@ -95,13 +95,33 @@ public struct InspectorRatingFlagView: View {
 
     private var labelMenu: some View {
         Menu {
-            Button { onLabelChange("") }       label: { Label("None",   systemImage: "xmark") }
+            Button { onLabelChange("") } label: { Label("None", systemImage: "xmark") }
             Divider()
-            Button { onLabelChange("Red") }    label: { Text("Red") }
-            Button { onLabelChange("Yellow") } label: { Text("Yellow") }
-            Button { onLabelChange("Green") }  label: { Text("Green") }
-            Button { onLabelChange("Blue") }   label: { Text("Blue") }
-            Button { onLabelChange("Purple") } label: { Text("Purple") }
+            Button { onLabelChange("Red") } label: {
+                Label { Text("Red") } icon: {
+                    Image(systemName: "circle.fill").foregroundStyle(Color.red)
+                }
+            }
+            Button { onLabelChange("Yellow") } label: {
+                Label { Text("Yellow") } icon: {
+                    Image(systemName: "circle.fill").foregroundStyle(Color.yellow)
+                }
+            }
+            Button { onLabelChange("Green") } label: {
+                Label { Text("Green") } icon: {
+                    Image(systemName: "circle.fill").foregroundStyle(Color.green)
+                }
+            }
+            Button { onLabelChange("Blue") } label: {
+                Label { Text("Blue") } icon: {
+                    Image(systemName: "circle.fill").foregroundStyle(Color.blue)
+                }
+            }
+            Button { onLabelChange("Purple") } label: {
+                Label { Text("Purple") } icon: {
+                    Image(systemName: "circle.fill").foregroundStyle(Color.purple)
+                }
+            }
         } label: {
             labelIndicator
         }
@@ -117,13 +137,13 @@ public struct InspectorRatingFlagView: View {
                     .font(.system(size: 16))
                     .foregroundStyle(labelPending ? Color.orange : Color.secondary)
             } else {
-                Circle()
-                    .fill(labelColor)
-                    .frame(width: 16, height: 16)
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(labelColor)
                 if labelPending {
-                    Circle()
-                        .stroke(Color.orange, lineWidth: 2)
-                        .frame(width: 20, height: 20)
+                    Image(systemName: "circle")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.orange)
                 }
             }
         }
