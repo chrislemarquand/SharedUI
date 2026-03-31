@@ -4,6 +4,7 @@ import AppKit
 public final class SharedGalleryCollectionView: NSCollectionView {
     public var onBackgroundClick: (() -> Void)?
     public var onMoveSelection: ((MoveCommandDirection, Bool) -> Void)?
+    public var onModifiedItemClick: ((IndexPath, NSEvent.ModifierFlags) -> Void)?
     public var contextMenuProvider: ((IndexPath) -> NSMenu?)?
     public var onDoubleClick: ((IndexPath) -> Void)?
     public var onActivateSelection: (() -> Void)?
@@ -16,6 +17,16 @@ public final class SharedGalleryCollectionView: NSCollectionView {
         let point = convert(event.locationInWindow, from: nil)
         let clickedIndexPath = indexPathForItem(at: point)
         let hadSelectionBefore = !selectionIndexPaths.isEmpty
+
+        // Intercept Shift+click and Cmd+click so the model can apply contiguous-range
+        // vs toggle semantics. Plain clicks and rubber-band drags go through super normally.
+        let selectionModifiers = event.modifierFlags.intersection([.shift, .command])
+        if let indexPath = clickedIndexPath,
+           !selectionModifiers.isEmpty,
+           let onModifiedItemClick {
+            onModifiedItemClick(indexPath, selectionModifiers)
+            return
+        }
 
         super.mouseDown(with: event)
 
