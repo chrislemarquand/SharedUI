@@ -87,9 +87,6 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         view.window?.makeFirstResponder(outlineView)
     }
 
-    /// The key view to use as a Tab-chain endpoint for this sidebar.
-    public var primaryKeyView: NSView { outlineView }
-
     // MARK: - Private state
 
     private var outlineView: SidebarOutlineView!
