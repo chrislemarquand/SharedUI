@@ -59,4 +59,15 @@ public enum ThumbnailGenerator {
         icon.size = NSSize(width: side, height: side)
         return icon
     }
+
+    /// Returns true if the disk-cached thumbnail is older than the source file.
+    /// Both URLs must be file URLs. Returns false if either modification date cannot be read —
+    /// callers should treat an unreadable source as a cache hit to avoid regenerating on every access.
+    public static func isDiskCacheStale(sourceURL: URL, cacheURL: URL) -> Bool {
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey]
+        guard let sourceMod = (try? sourceURL.resourceValues(forKeys: keys))?.contentModificationDate,
+              let cacheMod = (try? cacheURL.resourceValues(forKeys: keys))?.contentModificationDate
+        else { return false }
+        return sourceMod > cacheMod
+    }
 }
