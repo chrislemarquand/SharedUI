@@ -16,6 +16,73 @@ public struct AppWelcomeFeature {
     }
 }
 
+public struct AppWelcomePresentation: Identifiable {
+    public let id = UUID()
+    public let appName: String
+    public let features: [AppWelcomeFeature]
+    public let primaryButtonTitle: String
+    public let secondaryButtonTitle: String?
+    public let onPrimaryAction: (() -> Void)?
+    public let onSecondaryAction: (() -> Void)?
+
+    public init(
+        appName: String,
+        features: [AppWelcomeFeature],
+        primaryButtonTitle: String = "Get Started",
+        secondaryButtonTitle: String? = nil,
+        onPrimaryAction: (() -> Void)? = nil,
+        onSecondaryAction: (() -> Void)? = nil
+    ) {
+        self.appName = appName
+        self.features = features
+        self.primaryButtonTitle = primaryButtonTitle
+        self.secondaryButtonTitle = secondaryButtonTitle
+        self.onPrimaryAction = onPrimaryAction
+        self.onSecondaryAction = onSecondaryAction
+    }
+}
+
+public struct AppWelcomeSheetView: View {
+    private let presentation: AppWelcomePresentation
+
+    public init(presentation: AppWelcomePresentation) {
+        self.presentation = presentation
+    }
+
+    public var body: some View {
+        WhatsNewView(whatsNew: makeWhatsNew())
+            .frame(width: 540, height: 660)
+    }
+
+    private func makeWhatsNew() -> WhatsNew {
+        WhatsNew(
+            title: WhatsNew.Title(stringLiteral: "Welcome to \(presentation.appName)"),
+            features: presentation.features.map { feature in
+                WhatsNew.Feature(
+                    image: .init(
+                        systemName: feature.symbolName,
+                        foregroundColor: .accentColor
+                    ),
+                    title: WhatsNew.Text(stringLiteral: feature.title),
+                    subtitle: WhatsNew.Text(stringLiteral: feature.subtitle)
+                )
+            },
+            primaryAction: .init(
+                title: WhatsNew.Text(stringLiteral: presentation.primaryButtonTitle),
+                onDismiss: presentation.onPrimaryAction
+            ),
+            secondaryAction: presentation.secondaryButtonTitle.map { title in
+                WhatsNew.SecondaryAction(
+                    title: WhatsNew.Text(stringLiteral: title),
+                    action: .custom { _ in
+                        presentation.onSecondaryAction?()
+                    }
+                )
+            }
+        )
+    }
+}
+
 // MARK: - View controller
 
 /// An `NSViewController` that presents a WhatsNewKit welcome screen.
@@ -32,34 +99,15 @@ public final class AppWelcomeViewController: NSHostingController<AnyView> {
         onSecondaryAction: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil
     ) {
-        let whatsNew = WhatsNew(
-            title: WhatsNew.Title(stringLiteral: "Welcome to \(appName)"),
-            features: features.map { f in
-                WhatsNew.Feature(
-                    image: .init(
-                        systemName: f.symbolName,
-                        foregroundColor: .accentColor
-                    ),
-                    title: WhatsNew.Text(stringLiteral: f.title),
-                    subtitle: WhatsNew.Text(stringLiteral: f.subtitle)
-                )
-            },
-            primaryAction: .init(
-                title: WhatsNew.Text(stringLiteral: primaryButtonTitle),
-                onDismiss: onDismiss
-            ),
-            secondaryAction: secondaryButtonTitle.map { title in
-                WhatsNew.SecondaryAction(
-                    title: WhatsNew.Text(stringLiteral: title),
-                    action: .custom { _ in
-                        onSecondaryAction?()
-                    }
-                )
-            }
+        let presentation = AppWelcomePresentation(
+            appName: appName,
+            features: features,
+            primaryButtonTitle: primaryButtonTitle,
+            secondaryButtonTitle: secondaryButtonTitle,
+            onPrimaryAction: onDismiss,
+            onSecondaryAction: onSecondaryAction
         )
-
-        let view = WhatsNewView(whatsNew: whatsNew)
-        super.init(rootView: AnyView(view))
+        super.init(rootView: AnyView(AppWelcomeSheetView(presentation: presentation)))
         preferredContentSize = CGSize(width: 540, height: 660)
     }
 

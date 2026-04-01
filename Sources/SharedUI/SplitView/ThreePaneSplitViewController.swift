@@ -69,6 +69,7 @@ open class ThreePaneSplitViewController: NSSplitViewController {
 
     private let inspectorStartsVisible: Bool
     private var splitResizeObservers: [NSObjectProtocol] = []
+    private var contentKeyboardMonitor: Any?
     private var isPaneStateSyncScheduled = false
     private var didApplyInitialContentSplit = false
     private var didApplyInitialInspectorVisibility = false
@@ -163,6 +164,37 @@ open class ThreePaneSplitViewController: NSSplitViewController {
         super.viewWillDisappear()
         splitResizeObservers.forEach { NotificationCenter.default.removeObserver($0) }
         splitResizeObservers = []
+        removeContentKeyboardMonitor()
+    }
+
+    // MARK: - Content keyboard monitor
+
+    /// Installs a spacebar → Quick Look keyboard monitor scoped to the content pane.
+    ///
+    /// The monitor fires `onSpace` when:
+    /// - Space is pressed without command/control/option/function modifiers and without auto-repeat
+    /// - The key window is this app's window (not a panel or sheet)
+    /// - The first responder is within `contentView` (not the sidebar or inspector)
+    /// - The first responder is not an editable text view
+    ///
+    /// Call this from `viewDidLoad`. The monitor is removed automatically in `viewWillDisappear`.
+    /// Calling it again before removal is safe — the previous monitor is removed first.
+    public func installContentKeyboardMonitor(contentView: NSView, onSpace: @escaping () -> Void) {
+        removeContentKeyboardMonitor()
+        contentKeyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak contentView] event in
+            guard let self, let contentView else { return event }
+            guard event.keyCode == KeyCode.space, !event.isARepeat else { return event }
+            guard event.modifierFlags.intersection([.command, .control, .option, .function]).isEmpty else { return event }
+            guard KeyboardShortcutSupport.canHandleWindowShortcuts(in: self.view.window) else { return event }
+            guard !KeyboardShortcutSupport.isEditableTextResponder(self.view.window?.firstResponder) else { return event }
+            guard KeyboardShortcutSupport.isResponder(self.view.window?.firstResponder, inside: contentView) else { return event }
+            onSpace()
+            return nil
+        }
+    }
+
+    private func removeContentKeyboardMonitor() {
+        if let m = contentKeyboardMonitor { NSEvent.removeMonitor(m); contentKeyboardMonitor = nil }
     }
 
     // MARK: - Inspector toggle

@@ -72,12 +72,18 @@ public final class InspectorFieldSettingsViewController: NSViewController {
         rebuildContent()
     }
 
+    /// The intrinsic content width of the inspector field list. The enclosing window
+    /// may be wider (e.g. when sharing a fixed window width with other tabs); the
+    /// scroll view is centred within whatever space is available.
+    public static let preferredContentWidth: CGFloat = 580
+
     private func buildUI() {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.borderType = .noBorder
+        scrollView.verticalScrollElasticity = .none
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -85,8 +91,8 @@ public final class InspectorFieldSettingsViewController: NSViewController {
         view.addSubview(scrollView)
 
         NSLayoutConstraint.activate([
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            scrollView.widthAnchor.constraint(equalToConstant: Self.preferredContentWidth),
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
@@ -114,11 +120,11 @@ public final class InspectorFieldSettingsViewController: NSViewController {
         for (sectionIndex, section) in sections.enumerated() {
             // Gap row between sections for visual separation.
             if sectionIndex > 0 {
-                let gapRow = grid.addRow(with: [NSGridCell.emptyContentView, NSGridCell.emptyContentView])
+                let gapRow = grid.addRow(with: [NSGridCell.emptyContentView, NSGridCell.emptyContentView, NSGridCell.emptyContentView])
                 gapRow.height = 8
             }
 
-            // Section header — merged across both columns.
+            // Section header — merged across all three columns.
             let sectionToggle = NSButton(
                 checkboxWithTitle: section.title,
                 target: self,
@@ -134,27 +140,35 @@ public final class InspectorFieldSettingsViewController: NSViewController {
             sectionByButtonID[ObjectIdentifier(sectionToggle)] = section.title
             sectionToggleBySection[section.title] = sectionToggle
 
-            let headerRow = grid.addRow(with: [sectionToggle, NSGridCell.emptyContentView])
-            headerRow.mergeCells(in: NSRange(location: 0, length: 2))
+            let headerRow = grid.addRow(with: [sectionToggle, NSGridCell.emptyContentView, NSGridCell.emptyContentView])
+            headerRow.mergeCells(in: NSRange(location: 0, length: 3))
 
-            // Field rows — two per row, left then right.
-            // Left column is wrapped with a 20pt leading indent so field checkboxes
+            // Field rows — three per row.
+            // First column is wrapped with a 20pt leading indent so field checkboxes
             // align with the section header's text label.
             var togglesForSection: [NSButton] = []
             var i = 0
             while i < section.fields.count {
-                let left = makeFieldToggle(section.fields[i], sectionTitle: section.title)
-                togglesForSection.append(left)
-                let right: NSView
+                let first = makeFieldToggle(section.fields[i], sectionTitle: section.title)
+                togglesForSection.append(first)
+                let second: NSView
                 if i + 1 < section.fields.count {
-                    let r = makeFieldToggle(section.fields[i + 1], sectionTitle: section.title)
-                    togglesForSection.append(r)
-                    right = r
+                    let s = makeFieldToggle(section.fields[i + 1], sectionTitle: section.title)
+                    togglesForSection.append(s)
+                    second = s
                 } else {
-                    right = NSGridCell.emptyContentView
+                    second = NSGridCell.emptyContentView
                 }
-                grid.addRow(with: [indented(left), right])
-                i += 2
+                let third: NSView
+                if i + 2 < section.fields.count {
+                    let t = makeFieldToggle(section.fields[i + 2], sectionTitle: section.title)
+                    togglesForSection.append(t)
+                    third = t
+                } else {
+                    third = NSGridCell.emptyContentView
+                }
+                grid.addRow(with: [indented(first), second, third])
+                i += 3
             }
             fieldTogglesBySection[section.title] = togglesForSection
         }
@@ -185,6 +199,7 @@ public final class InspectorFieldSettingsViewController: NSViewController {
         let toggle = NSButton(checkboxWithTitle: field.label, target: self, action: #selector(fieldToggled(_:)))
         toggle.state = field.isEnabled ? .on : .off
         toggle.translatesAutoresizingMaskIntoConstraints = false
+        toggle.lineBreakMode = .byTruncatingTail
         fieldByButtonID[ObjectIdentifier(toggle)] = field.id
         sectionForFieldID[field.id] = sectionTitle
         return toggle

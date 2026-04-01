@@ -6,21 +6,17 @@ public struct SettingsTabDescriptor {
     public let viewController: NSViewController
     /// Pass a fixed height for scrollable panes; nil uses fittingSize.
     public let preferredHeight: CGFloat?
-    /// Pass a fixed width for this tab; nil uses contentWidth.
-    public let preferredWidth: CGFloat?
 
     public init(
         symbolName: String,
         label: String,
         viewController: NSViewController,
-        preferredHeight: CGFloat? = nil,
-        preferredWidth: CGFloat? = nil
+        preferredHeight: CGFloat? = nil
     ) {
         self.symbolName = symbolName
         self.label = label
         self.viewController = viewController
         self.preferredHeight = preferredHeight
-        self.preferredWidth = preferredWidth
     }
 }
 
@@ -34,12 +30,12 @@ public final class SettingsWindowController: NSWindowController {
         let window = NSWindow(contentViewController: tabsController)
         window.title = tabs.first?.label ?? "Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
-        let initialWidth = tabs.first?.preferredWidth ?? Self.contentWidth
-        window.setContentSize(NSSize(width: initialWidth, height: 100))
-        window.minSize = NSSize(width: initialWidth, height: 100)
-        window.maxSize = NSSize(width: initialWidth, height: 1200)
+        window.setContentSize(NSSize(width: Self.contentWidth, height: 100))
+        window.minSize = NSSize(width: Self.contentWidth, height: 100)
+        window.maxSize = NSSize(width: Self.contentWidth, height: 1200)
         window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
+        window.setFrameAutosaveName("SharedUI.SettingsWindow")
         super.init(window: window)
         tabsController.refreshWindowForSelectedTab(animated: false)
     }
@@ -49,7 +45,6 @@ public final class SettingsWindowController: NSWindowController {
 
     public func showWindowAndActivate() {
         showWindow(nil)
-        window?.center()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -98,7 +93,7 @@ private final class SettingsTabViewController: NSTabViewController {
         title = tab.label
         window.title = tab.label
 
-        let targetContentWidth = tab.preferredWidth ?? SettingsWindowController.contentWidth
+        let targetContentWidth = SettingsWindowController.contentWidth
 
         let targetContentHeight: CGFloat
         if let preferred = tab.preferredHeight {
