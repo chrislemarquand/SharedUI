@@ -1,6 +1,46 @@
 import AppKit
 import SwiftUI
 
+private struct InspectorRatingFlagActionPressedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private struct InspectorRatingFlagActionHoveredKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    var inspectorRatingFlagActionIsPressed: Bool {
+        get { self[InspectorRatingFlagActionPressedKey.self] }
+        set { self[InspectorRatingFlagActionPressedKey.self] = newValue }
+    }
+
+    var inspectorRatingFlagActionIsHovered: Bool {
+        get { self[InspectorRatingFlagActionHoveredKey.self] }
+        set { self[InspectorRatingFlagActionHoveredKey.self] = newValue }
+    }
+}
+
+private struct InspectorRatingFlagActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        InspectorRatingFlagActionButton(configuration: configuration)
+    }
+
+    private struct InspectorRatingFlagActionButton: View {
+        let configuration: Configuration
+        @State private var isHovered = false
+
+        var body: some View {
+            configuration.label
+                .environment(\.inspectorRatingFlagActionIsPressed, configuration.isPressed)
+                .environment(\.inspectorRatingFlagActionIsHovered, isHovered)
+                .onHover { hovering in
+                    isHovered = hovering
+                }
+        }
+    }
+}
+
 public struct InspectorRatingFlagView: View {
     public let rating: Int
     public let ratingPending: Bool
@@ -16,6 +56,8 @@ public struct InspectorRatingFlagView: View {
     public let labelPending: Bool
     public let labelEnabled: Bool
     public let onLabelChange: (String) -> Void
+    @State private var isLabelHovered = false
+    @State private var isLabelPressed = false
 
     public init(
         rating: Int, ratingPending: Bool, ratingEnabled: Bool, onRatingChange: @escaping (Int) -> Void,
@@ -60,11 +102,12 @@ public struct InspectorRatingFlagView: View {
                 Button {
                     onRatingChange(rating == n ? 0 : n)
                 } label: {
-                    Image(systemName: n <= rating ? "star.fill" : "star")
-                        .font(.system(size: 14))
-                        .foregroundStyle(ratingPending ? Color.orange : Color.primary)
+                    InspectorRatingFlagSymbolLabel(
+                        symbolName: n <= rating ? "star.fill" : "star",
+                        pending: ratingPending
+                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(InspectorRatingFlagActionButtonStyle())
             }
         }
     }
@@ -79,12 +122,10 @@ public struct InspectorRatingFlagView: View {
             }
             onPickChange(next)
         } label: {
-            Image(systemName: pickSymbol)
-                .font(.system(size: 14))
-                .foregroundStyle(pickPending ? Color.orange : Color.primary)
+            InspectorRatingFlagSymbolLabel(symbolName: pickSymbol, pending: pickPending)
                 .frame(width: 18, height: 18)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(InspectorRatingFlagActionButtonStyle())
     }
 
     private var pickSymbol: String {
@@ -111,19 +152,37 @@ public struct InspectorRatingFlagView: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+        .onHover { hovering in
+            isLabelHovered = hovering
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    isLabelPressed = true
+                }
+                .onEnded { _ in
+                    isLabelPressed = false
+                }
+        )
     }
 
     @ViewBuilder
     private var labelIndicator: some View {
         ZStack {
             if label.isEmpty {
-                noneCircleImage(size: 16, strokeColor: labelPending ? .systemOrange : .secondaryLabelColor)
+                noneCircleImage(
+                    size: 16,
+                    strokeColor: labelPending ? NSColor.systemOrange : NSColor.secondaryLabelColor
+                )
             } else {
-                colorCircleImage(nsLabelColor, size: 16)
+                colorCircleImage(
+                    nsLabelColor,
+                    size: 16
+                )
                 if labelPending {
                     Image(systemName: "circle")
                         .font(.system(size: 18))
-                        .foregroundStyle(Color.orange)
+                        .foregroundStyle(.orange)
                 }
             }
         }
@@ -165,5 +224,38 @@ public struct InspectorRatingFlagView: View {
         }
         nsImage.isTemplate = false
         return Image(nsImage: nsImage)
+    }
+}
+
+private struct InspectorRatingFlagSymbolLabel: View {
+    let symbolName: String
+    let pending: Bool
+    @Environment(\.inspectorRatingFlagActionIsPressed) private var isPressed
+    @Environment(\.inspectorRatingFlagActionIsHovered) private var isHovered
+
+    var body: some View {
+        Image(systemName: symbolName)
+            .font(.system(size: 14))
+            .foregroundStyle(symbolColor)
+    }
+
+    private var symbolColor: Color {
+        if pending {
+            if isPressed {
+                return Color(nsColor: NSColor.systemOrange.withSystemEffect(.pressed))
+            }
+            if isHovered {
+                return Color(nsColor: NSColor.systemOrange.withSystemEffect(.rollover))
+            }
+            return .orange
+        }
+
+        if isPressed {
+            return Color.primary.opacity(0.7)
+        }
+        if isHovered {
+            return .primary
+        }
+        return .secondary
     }
 }

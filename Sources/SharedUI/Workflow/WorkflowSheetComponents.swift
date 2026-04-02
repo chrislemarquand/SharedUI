@@ -2,17 +2,20 @@ import SwiftUI
 
 public struct WorkflowSheetContainer<Content: View>: View {
     private let title: String
+    private let subtitle: String?
     private let infoText: String?
     private let width: CGFloat
     private let content: Content
 
     public init(
         title: String,
+        subtitle: String? = nil,
         infoText: String? = nil,
         width: CGFloat = 580,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
+        self.subtitle = subtitle
         self.infoText = infoText
         self.width = width
         self.content = content()
@@ -20,7 +23,14 @@ public struct WorkflowSheetContainer<Content: View>: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            WorkflowSheetTitleRow(title: title, infoText: infoText)
+            VStack(alignment: .leading, spacing: 2) {
+                WorkflowSheetTitleRow(title: title, infoText: infoText)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
             content
         }
         .fixedSize(horizontal: false, vertical: true)
