@@ -108,6 +108,8 @@ public struct InspectorRatingFlagView: View {
                     )
                 }
                 .buttonStyle(InspectorRatingFlagActionButtonStyle())
+                .accessibilityLabel("Rating \(n) star\(n == 1 ? "" : "s")")
+                .accessibilityValue("\(rating) selected")
             }
         }
     }
@@ -126,6 +128,8 @@ public struct InspectorRatingFlagView: View {
                 .frame(width: 18, height: 18)
         }
         .buttonStyle(InspectorRatingFlagActionButtonStyle())
+        .accessibilityLabel("Pick flag")
+        .accessibilityValue(pickAccessibilityValue)
     }
 
     private var pickSymbol: String {
@@ -151,6 +155,7 @@ public struct InspectorRatingFlagView: View {
             labelIndicator
         }
         .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
         .fixedSize()
         .onHover { hovering in
             isLabelHovered = hovering
@@ -164,6 +169,8 @@ public struct InspectorRatingFlagView: View {
                     isLabelPressed = false
                 }
         )
+        .accessibilityLabel("Color label")
+        .accessibilityValue(label.isEmpty ? "None" : label)
     }
 
     @ViewBuilder
@@ -172,11 +179,11 @@ public struct InspectorRatingFlagView: View {
             if label.isEmpty {
                 noneCircleImage(
                     size: 16,
-                    strokeColor: labelPending ? NSColor.systemOrange : NSColor.secondaryLabelColor
+                    strokeColor: labelIndicatorStrokeColor
                 )
             } else {
                 colorCircleImage(
-                    nsLabelColor,
+                    labelIndicatorColor,
                     size: 16
                 )
                 if labelPending {
@@ -189,6 +196,14 @@ public struct InspectorRatingFlagView: View {
         .frame(width: 22, height: 22)
     }
 
+    private var pickAccessibilityValue: String {
+        switch pick {
+        case 1: return "Picked"
+        case -1: return "Rejected"
+        default: return "Not set"
+        }
+    }
+
     private var nsLabelColor: NSColor {
         switch label {
         case "Red":    return .systemRed
@@ -198,6 +213,27 @@ public struct InspectorRatingFlagView: View {
         case "Purple": return .systemPurple
         default:       return .clear
         }
+    }
+
+    private var labelIndicatorColor: NSColor {
+        if isLabelPressed {
+            return nsLabelColor.withSystemEffect(.pressed)
+        }
+        if isLabelHovered {
+            return nsLabelColor.withSystemEffect(.rollover)
+        }
+        return nsLabelColor
+    }
+
+    private var labelIndicatorStrokeColor: NSColor {
+        let base = labelPending ? NSColor.systemOrange : NSColor.secondaryLabelColor
+        if isLabelPressed {
+            return base.withSystemEffect(.pressed)
+        }
+        if isLabelHovered {
+            return base.withSystemEffect(.rollover)
+        }
+        return base
     }
 
     private func colorCircleImage(_ nsColor: NSColor, size: CGFloat = 14) -> Image {
