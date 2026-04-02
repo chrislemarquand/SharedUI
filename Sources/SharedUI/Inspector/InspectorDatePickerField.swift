@@ -7,6 +7,7 @@ public struct InspectorDatePickerField: NSViewRepresentable {
     private let minimumDate: Date?
     private let maximumDate: Date?
     private let datePickerElements: NSDatePicker.ElementFlags
+    private let datePickerStyle: NSDatePicker.Style
     private let accessibilityLabel: String?
 
     public init(
@@ -15,6 +16,7 @@ public struct InspectorDatePickerField: NSViewRepresentable {
         minimumDate: Date? = nil,
         maximumDate: Date? = nil,
         datePickerElements: NSDatePicker.ElementFlags = [.yearMonthDay, .hourMinute],
+        datePickerStyle: NSDatePicker.Style = .textFieldAndStepper,
         accessibilityLabel: String? = nil
     ) {
         _selection = selection
@@ -22,6 +24,7 @@ public struct InspectorDatePickerField: NSViewRepresentable {
         self.minimumDate = minimumDate
         self.maximumDate = maximumDate
         self.datePickerElements = datePickerElements
+        self.datePickerStyle = datePickerStyle
         self.accessibilityLabel = accessibilityLabel
     }
 
@@ -32,7 +35,7 @@ public struct InspectorDatePickerField: NSViewRepresentable {
     public func makeNSView(context: Context) -> ContainerView {
         let picker = NSDatePicker(frame: .zero)
         picker.datePickerMode = .single
-        picker.datePickerStyle = .textFieldAndStepper
+        picker.datePickerStyle = datePickerStyle
         picker.target = context.coordinator
         picker.action = #selector(Coordinator.didChangeDate(_:))
         picker.translatesAutoresizingMaskIntoConstraints = false
@@ -49,6 +52,7 @@ public struct InspectorDatePickerField: NSViewRepresentable {
         picker.minDate = minimumDate
         picker.maxDate = maximumDate
         picker.datePickerElements = datePickerElements
+        picker.datePickerStyle = datePickerStyle
         if let accessibilityLabel {
             picker.setAccessibilityLabel(accessibilityLabel)
         }
