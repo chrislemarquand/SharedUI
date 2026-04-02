@@ -139,29 +139,45 @@ public struct WorkflowInlineMessageBanner: View {
     }
 }
 
-public struct WorkflowFormRow<Content: View>: View {
-    private let label: String
+public struct WorkflowFormRow<Label: View, Content: View>: View {
+    private let label: Label
     private let labelWidth: CGFloat
+    private let labelAlignment: Alignment
     private let rowMinHeight: CGFloat
     private let content: Content
 
     public init(
         _ label: String,
         labelWidth: CGFloat = 132,
+        labelAlignment: Alignment = .trailing,
         rowMinHeight: CGFloat = 28,
         @ViewBuilder content: () -> Content
-    ) {
-        self.label = label
+    ) where Label == Text {
+        self.label = Text(label)
         self.labelWidth = labelWidth
+        self.labelAlignment = labelAlignment
+        self.rowMinHeight = rowMinHeight
+        self.content = content()
+    }
+
+    public init(
+        labelWidth: CGFloat = 132,
+        labelAlignment: Alignment = .trailing,
+        rowMinHeight: CGFloat = 28,
+        @ViewBuilder label: () -> Label,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.label = label()
+        self.labelWidth = labelWidth
+        self.labelAlignment = labelAlignment
         self.rowMinHeight = rowMinHeight
         self.content = content()
     }
 
     public var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            Text(label)
-                .lineLimit(1)
-                .frame(width: labelWidth, alignment: .trailing)
+            label
+                .frame(width: labelWidth, alignment: labelAlignment)
             content
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
