@@ -1,10 +1,37 @@
 import SwiftUI
 
+public struct WorkflowSheetSectionSpacing: Sendable {
+    public let headerToTop: CGFloat
+    public let topToMain: CGFloat
+    public let mainToFooter: CGFloat
+
+    public init(
+        headerToTop: CGFloat,
+        topToMain: CGFloat,
+        mainToFooter: CGFloat
+    ) {
+        self.headerToTop = headerToTop
+        self.topToMain = topToMain
+        self.mainToFooter = mainToFooter
+    }
+
+    public static func uniform(_ value: CGFloat) -> WorkflowSheetSectionSpacing {
+        WorkflowSheetSectionSpacing(
+            headerToTop: value,
+            topToMain: value,
+            mainToFooter: value
+        )
+    }
+
+    public static let `default`: WorkflowSheetSectionSpacing = .uniform(12)
+}
+
 public struct WorkflowSheetContainer<Content: View>: View {
     private let title: String
     private let subtitle: String?
     private let infoText: String?
     private let width: CGFloat
+    private let sectionSpacing: WorkflowSheetSectionSpacing
     private let content: Content
 
     public init(
@@ -12,17 +39,19 @@ public struct WorkflowSheetContainer<Content: View>: View {
         subtitle: String? = nil,
         infoText: String? = nil,
         width: CGFloat = 580,
+        sectionSpacing: WorkflowSheetSectionSpacing = .default,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.subtitle = subtitle
         self.infoText = infoText
         self.width = width
+        self.sectionSpacing = sectionSpacing
         self.content = content()
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 WorkflowSheetTitleRow(title: title, infoText: infoText)
                 if let subtitle {
@@ -31,6 +60,7 @@ public struct WorkflowSheetContainer<Content: View>: View {
                         .foregroundStyle(.tertiary)
                 }
             }
+            .padding(.bottom, sectionSpacing.headerToTop)
             content
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -106,6 +136,36 @@ public struct WorkflowInlineMessageBanner: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+public struct WorkflowFormRow<Content: View>: View {
+    private let label: String
+    private let labelWidth: CGFloat
+    private let rowMinHeight: CGFloat
+    private let content: Content
+
+    public init(
+        _ label: String,
+        labelWidth: CGFloat = 132,
+        rowMinHeight: CGFloat = 28,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.label = label
+        self.labelWidth = labelWidth
+        self.rowMinHeight = rowMinHeight
+        self.content = content()
+    }
+
+    public var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text(label)
+                .lineLimit(1)
+                .frame(width: labelWidth, alignment: .trailing)
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, minHeight: rowMinHeight, alignment: .leading)
     }
 }
 
