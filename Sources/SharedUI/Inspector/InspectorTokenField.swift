@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// A keyword token field styled to match the inspector's text fields.
@@ -63,60 +62,76 @@ public struct InspectorTokenField: View {
     // MARK: - Body
 
     public var body: some View {
-        TokenFlowLayout(spacing: 4) {
-            ForEach(Array(tokens.enumerated()), id: \.offset) { index, token in
-                TokenChip(token: token) { remove(at: index) }
+        let currentTokens = tokens
+        let currentSuggestions = filteredSuggestions
+
+        ZStack(alignment: .topLeading) {
+            // Real TextField provides the adaptive grey bezel that matches other
+            // inspector fields. It draws via AppKit inside the NSVisualEffectView
+            // hierarchy so vibrancy adaptation is handled automatically.
+            TextField("", text: .constant(""))
+                .textFieldStyle(.roundedBorder)
+                .frame(maxHeight: .infinity)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+            TokenFlowLayout(spacing: 4) {
+                ForEach(currentTokens.enumerated(), id: \.offset) { index, token in
+                    TokenChip(token: token) { remove(at: index) }
+                }
+                TextField(currentTokens.isEmpty ? placeholder : "", text: $inputText)
+                    .textFieldStyle(.plain)
+                    .focused($inputFocused)
+                    .frame(minWidth: 44)
+                    .onSubmit(addCurrentInput)
+                    .onChange(of: inputText) { _, new in
+                        showSuggestions = inputFocused && !new.isEmpty && !currentSuggestions.isEmpty
+                    }
+                    .onChange(of: inputFocused) { _, focused in
+                        if !focused { showSuggestions = false }
+                    }
+                    .popover(isPresented: $showSuggestions, arrowEdge: .bottom) {
+                        SuggestionList(suggestions: currentSuggestions) { suggestion in
+                            inputText = suggestion
+                            addCurrentInput()
+                        }
+                    }
             }
-            TextField(tokens.isEmpty ? placeholder : "", text: $inputText)
-                .textFieldStyle(.plain)
-                .focused($inputFocused)
-                .frame(minWidth: 44)
-                .onSubmit(addCurrentInput)
-                .onChange(of: inputText) { _, new in
-                    showSuggestions = inputFocused && !new.isEmpty && !filteredSuggestions.isEmpty
-                }
-                .onChange(of: inputFocused) { _, focused in
-                    if !focused { showSuggestions = false }
-                }
-                .popover(isPresented: $showSuggestions, arrowEdge: .bottom) {
-                    suggestionList
-                }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Color(NSColor.controlColor))
-        )
-        .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .inset(by: -2.5)
-                .stroke(Color.accentColor, lineWidth: 3)
+        .overlay {
+            RoundedRectangle(cornerRadius: 6)
+                .inset(by: -3)
+                .strokeBorder(Color.accentColor, lineWidth: 3)
                 .opacity(inputFocused ? 1 : 0)
-                .animation(.easeInOut(duration: 0.1), value: inputFocused)
-        )
+                .animation(.easeInOut(duration: 0.15), value: inputFocused)
+                .allowsHitTesting(false)
+        }
         .contentShape(Rectangle())
         .onTapGesture { inputFocused = true }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Keywords field")
     }
+}
 
-    // MARK: - Suggestion list
+// MARK: - Suggestion list
 
-    private var suggestionList: some View {
+private struct SuggestionList: View {
+    let suggestions: [String]
+    let onSelect: (String) -> Void
+
+    var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(filteredSuggestions, id: \.self) { suggestion in
-                    Button {
-                        inputText = suggestion
-                        addCurrentInput()
-                    } label: {
-                        Text(suggestion)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                ForEach(suggestions, id: \.self) { suggestion in
+                    Button(suggestion) { onSelect(suggestion) }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
                 }
             }
             .padding(.vertical, 4)
@@ -134,13 +149,14 @@ private struct TokenChip: View {
     var body: some View {
         HStack(spacing: 3) {
             Text(token)
-            Button(action: onRemove) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-            }
-            .buttonStyle(.plain)
+                .font(.caption)
+            Button("Remove \(token)", systemImage: "xmark", action: onRemove)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.plain)
+                .font(.caption)
+                .fontWeight(.bold)
+                .imageScale(.small)
         }
-        .font(.system(size: 11))
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
         .background(Capsule().fill(Color.accentColor.opacity(0.15)))
