@@ -1,11 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// An NSTokenField wrapper that converts a comma-space separated string
-/// to/from discrete tokens. Return is the only tokenising character —
-/// comma is treated as a literal character within a keyword so that
-/// keywords like "Smith, John" are preserved as a single token.
-public struct InspectorTokenField: NSViewRepresentable {
+/// A styled keyword token field matching the inspector's text field appearance.
+/// Return is the only tokenising character — comma is treated as literal within
+/// a keyword so that "Smith, John" is preserved as a single token.
+public struct InspectorTokenField: View {
     @Binding var text: String
     var placeholder: String
     var suggestions: [String]
@@ -20,23 +19,44 @@ public struct InspectorTokenField: NSViewRepresentable {
         self.suggestions = suggestions
     }
 
-    public func makeCoordinator() -> Coordinator {
+    public var body: some View {
+        TokenFieldRepresentable(text: $text, placeholder: placeholder, suggestions: suggestions)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color(NSColor.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .strokeBorder(Color(NSColor.separatorColor), lineWidth: 0.5)
+            )
+    }
+}
+
+// MARK: - Representable
+
+private struct TokenFieldRepresentable: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var suggestions: [String]
+
+    func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
     }
 
-    public func makeNSView(context: Context) -> NSTokenField {
-        let field = NSTokenField()
+    func makeNSView(context: Context) -> AutoSizingTokenField {
+        let field = AutoSizingTokenField()
         field.tokenizingCharacterSet = .newlines
         field.delegate = context.coordinator
         field.placeholderString = placeholder
-        field.bezelStyle = .roundedBezel
-        field.isBordered = true
+        field.isBordered = false
+        field.drawsBackground = false
+        field.backgroundColor = .clear
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         context.coordinator.setTokens(in: field, from: text)
         return field
     }
 
-    public func updateNSView(_ field: NSTokenField, context: Context) {
+    func updateNSView(_ field: AutoSizingTokenField, context: Context) {
         context.coordinator.parent = self
         field.placeholderString = placeholder
         if !context.coordinator.isEditing {
@@ -46,18 +66,19 @@ public struct InspectorTokenField: NSViewRepresentable {
 
     // MARK: - Coordinator
 
-    public final class Coordinator: NSObject, NSTokenFieldDelegate {
-        var parent: InspectorTokenField
+    final class Coordinator: NSObject, NSTokenFieldDelegate {
+        var parent: TokenFieldRepresentable
         var isEditing = false
 
-        init(parent: InspectorTokenField) {
+        init(parent: TokenFieldRepresentable) {
             self.parent = parent
         }
 
-        func setTokens(in field: NSTokenField, from string: String) {
+        func setTokens(in field: AutoSizingTokenField, from string: String) {
             let tokens = Self.tokens(from: string)
             if (field.objectValue as? [String]) != tokens {
                 field.objectValue = tokens
+                field.invalidateIntrinsicContentSize()
             }
         }
 
@@ -72,7 +93,7 @@ public struct InspectorTokenField: NSViewRepresentable {
             ((field.objectValue as? [String]) ?? []).joined(separator: ", ")
         }
 
-        private func commit(from field: NSTokenField) {
+        private func commit(from field: AutoSizingTokenField) {
             let newText = Self.string(from: field)
             if newText != parent.text {
                 parent.text = newText
@@ -81,7 +102,7 @@ public struct InspectorTokenField: NSViewRepresentable {
 
         // MARK: NSTokenFieldDelegate
 
-        public func tokenField(
+        func tokenField(
             _ tokenField: NSTokenField,
             completionsForSubstring substring: String,
             indexOfToken tokenIndex: Int,
@@ -92,25 +113,35 @@ public struct InspectorTokenField: NSViewRepresentable {
             return parent.suggestions.filter { $0.lowercased().hasPrefix(lower) }
         }
 
-        public func tokenField(_ tokenField: NSTokenField, shouldAdd tokens: [Any], at index: Int) -> [Any] {
+        func tokenField(_ tokenField: NSTokenField, shouldAdd tokens: [Any], at index: Int) -> [Any] {
             tokens
         }
 
         // MARK: NSControlTextEditingDelegate
 
-        public func controlTextDidBeginEditing(_ obj: Notification) {
+        func controlTextDidBeginEditing(_ obj: Notification) {
             isEditing = true
         }
 
-        public func controlTextDidChange(_ obj: Notification) {
-            guard let field = obj.object as? NSTokenField else { return }
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? AutoSizingTokenField else { return }
+            field.invalidateIntrinsicContentSize()
             commit(from: field)
         }
 
-        public func controlTextDidEndEditing(_ obj: Notification) {
+        func controlTextDidEndEditing(_ obj: Notification) {
             isEditing = false
-            guard let field = obj.object as? NSTokenField else { return }
+            guard let field = obj.object as? AutoSizingTokenField else { return }
+            field.invalidateIntrinsicContentSize()
             commit(from: field)
         }
+    }
+}
+
+// MARK: - Auto-sizing subclass
+
+private final class AutoSizingTokenField: NSTokenField {
+    override var intrinsicContentSize: NSSize {
+        CGSize(width: NSView.noIntrinsicMetric, height: fittingSize.height)
     }
 }
