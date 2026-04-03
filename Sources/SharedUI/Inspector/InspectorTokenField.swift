@@ -1,11 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// An NSTokenField wrapper that converts a comma-space separated string
-/// to/from discrete tokens. Return is the only tokenising character —
-/// comma is treated as a literal character within a keyword so that
-/// keywords like "Smith, John" are preserved as a single token.
-public struct InspectorTokenField: NSViewRepresentable {
+/// A styled keyword token field matching the inspector's text field appearance.
+/// Return is the only tokenising character — comma is treated as literal within
+/// a keyword so that "Smith, John" is preserved as a single token.
+public struct InspectorTokenField: View {
     @Binding var text: String
     var placeholder: String
     var suggestions: [String]
@@ -20,23 +19,55 @@ public struct InspectorTokenField: NSViewRepresentable {
         self.suggestions = suggestions
     }
 
-    public func makeCoordinator() -> Coordinator {
+    public var body: some View {
+        TokenFieldRepresentable(text: $text, placeholder: placeholder, suggestions: suggestions)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color(NSColor.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .strokeBorder(Color(NSColor.separatorColor), lineWidth: 0.5)
+            )
+    }
+}
+
+// MARK: - Representable
+
+private struct TokenFieldRepresentable: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var suggestions: [String]
+
+    func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
     }
 
-    public func makeNSView(context: Context) -> NSTokenField {
+    func makeNSView(context: Context) -> NSTokenField {
         let field = NSTokenField()
         field.tokenizingCharacterSet = .newlines
         field.delegate = context.coordinator
         field.placeholderString = placeholder
-        field.bezelStyle = .roundedBezel
-        field.isBordered = true
+        // Remove all AppKit chrome so the SwiftUI background/overlay show through.
+        field.isBordered = false
+        field.drawsBackground = false
+        field.backgroundColor = .clear
+        field.focusRingType = .none
+        // The CA layer paints its own white background even when drawsBackground = false.
+        // Force it transparent explicitly.
+        field.wantsLayer = true
+        field.layer?.backgroundColor = NSColor.clear.cgColor
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         context.coordinator.setTokens(in: field, from: text)
+        // KVO catches token deletions that don't fire controlTextDidChange
+        // (e.g. click-select a token then Delete key goes via deleteBackward:).
+        field.addObserver(context.coordinator, forKeyPath: "objectValue", options: .new, context: nil)
         return field
     }
 
-    public func updateNSView(_ field: NSTokenField, context: Context) {
+    func updateNSView(_ field: NSTokenField, context: Context) {
+        // Re-clear in case AppKit reinstates a layer background after hierarchy attachment.
+        field.layer?.backgroundColor = NSColor.clear.cgColor
         context.coordinator.parent = self
         field.placeholderString = placeholder
         if !context.coordinator.isEditing {
@@ -44,21 +75,36 @@ public struct InspectorTokenField: NSViewRepresentable {
         }
     }
 
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSTokenField, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0, let cell = nsView.cell else { return nil }
+        let height = cell.cellSize(
+            forBounds: NSRect(x: 0, y: 0, width: width, height: 10_000)
+        ).height
+        return CGSize(width: width, height: height)
+    }
+
+    static func dismantleNSView(_ nsView: NSTokenField, coordinator: Coordinator) {
+        nsView.removeObserver(coordinator, forKeyPath: "objectValue")
+    }
+
     // MARK: - Coordinator
 
-    public final class Coordinator: NSObject, NSTokenFieldDelegate {
-        var parent: InspectorTokenField
+    final class Coordinator: NSObject, NSTokenFieldDelegate {
+        var parent: TokenFieldRepresentable
         var isEditing = false
+        // Prevents KVO re-entrancy when we programmatically set objectValue in setTokens.
+        private var isSettingTokens = false
 
-        init(parent: InspectorTokenField) {
+        init(parent: TokenFieldRepresentable) {
             self.parent = parent
         }
 
         func setTokens(in field: NSTokenField, from string: String) {
             let tokens = Self.tokens(from: string)
-            if (field.objectValue as? [String]) != tokens {
-                field.objectValue = tokens
-            }
+            guard (field.objectValue as? [String]) != tokens else { return }
+            isSettingTokens = true
+            field.objectValue = tokens
+            isSettingTokens = false
         }
 
         static func tokens(from string: String) -> [String] {
@@ -79,9 +125,23 @@ public struct InspectorTokenField: NSViewRepresentable {
             }
         }
 
+        // MARK: KVO — catches token deletions that bypass controlTextDidChange
+
+        override func observeValue(
+            forKeyPath keyPath: String?,
+            of object: Any?,
+            change: [NSKeyValueChangeKey: Any]?,
+            context: UnsafeMutableRawPointer?
+        ) {
+            guard keyPath == "objectValue",
+                  !isSettingTokens,
+                  let field = object as? NSTokenField else { return }
+            commit(from: field)
+        }
+
         // MARK: NSTokenFieldDelegate
 
-        public func tokenField(
+        func tokenField(
             _ tokenField: NSTokenField,
             completionsForSubstring substring: String,
             indexOfToken tokenIndex: Int,
@@ -92,22 +152,22 @@ public struct InspectorTokenField: NSViewRepresentable {
             return parent.suggestions.filter { $0.lowercased().hasPrefix(lower) }
         }
 
-        public func tokenField(_ tokenField: NSTokenField, shouldAdd tokens: [Any], at index: Int) -> [Any] {
+        func tokenField(_ tokenField: NSTokenField, shouldAdd tokens: [Any], at index: Int) -> [Any] {
             tokens
         }
 
         // MARK: NSControlTextEditingDelegate
 
-        public func controlTextDidBeginEditing(_ obj: Notification) {
+        func controlTextDidBeginEditing(_ obj: Notification) {
             isEditing = true
         }
 
-        public func controlTextDidChange(_ obj: Notification) {
+        func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSTokenField else { return }
             commit(from: field)
         }
 
-        public func controlTextDidEndEditing(_ obj: Notification) {
+        func controlTextDidEndEditing(_ obj: Notification) {
             isEditing = false
             guard let field = obj.object as? NSTokenField else { return }
             commit(from: field)
