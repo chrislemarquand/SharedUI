@@ -43,8 +43,8 @@ private struct TokenFieldRepresentable: NSViewRepresentable {
         Coordinator(parent: self)
     }
 
-    func makeNSView(context: Context) -> NSTokenField {
-        let field = NSTokenField()
+    func makeNSView(context: Context) -> AutoSizingTokenField {
+        let field = AutoSizingTokenField()
         field.tokenizingCharacterSet = .newlines
         field.delegate = context.coordinator
         field.placeholderString = placeholder
@@ -56,20 +56,12 @@ private struct TokenFieldRepresentable: NSViewRepresentable {
         return field
     }
 
-    func updateNSView(_ field: NSTokenField, context: Context) {
+    func updateNSView(_ field: AutoSizingTokenField, context: Context) {
         context.coordinator.parent = self
         field.placeholderString = placeholder
         if !context.coordinator.isEditing {
             context.coordinator.setTokens(in: field, from: text)
         }
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSTokenField, context: Context) -> CGSize? {
-        guard let width = proposal.width, width > 0, let cell = nsView.cell else { return nil }
-        let height = cell.cellSize(
-            forBounds: NSRect(x: 0, y: 0, width: width, height: 10_000)
-        ).height
-        return CGSize(width: width, height: height)
     }
 
     // MARK: - Coordinator
@@ -82,10 +74,11 @@ private struct TokenFieldRepresentable: NSViewRepresentable {
             self.parent = parent
         }
 
-        func setTokens(in field: NSTokenField, from string: String) {
+        func setTokens(in field: AutoSizingTokenField, from string: String) {
             let tokens = Self.tokens(from: string)
             if (field.objectValue as? [String]) != tokens {
                 field.objectValue = tokens
+                field.invalidateIntrinsicContentSize()
             }
         }
 
@@ -100,7 +93,7 @@ private struct TokenFieldRepresentable: NSViewRepresentable {
             ((field.objectValue as? [String]) ?? []).joined(separator: ", ")
         }
 
-        private func commit(from field: NSTokenField) {
+        private func commit(from field: AutoSizingTokenField) {
             let newText = Self.string(from: field)
             if newText != parent.text {
                 parent.text = newText
@@ -131,14 +124,24 @@ private struct TokenFieldRepresentable: NSViewRepresentable {
         }
 
         func controlTextDidChange(_ obj: Notification) {
-            guard let field = obj.object as? NSTokenField else { return }
+            guard let field = obj.object as? AutoSizingTokenField else { return }
+            field.invalidateIntrinsicContentSize()
             commit(from: field)
         }
 
         func controlTextDidEndEditing(_ obj: Notification) {
             isEditing = false
-            guard let field = obj.object as? NSTokenField else { return }
+            guard let field = obj.object as? AutoSizingTokenField else { return }
+            field.invalidateIntrinsicContentSize()
             commit(from: field)
         }
+    }
+}
+
+// MARK: - Auto-sizing subclass
+
+private final class AutoSizingTokenField: NSTokenField {
+    override var intrinsicContentSize: NSSize {
+        CGSize(width: NSView.noIntrinsicMetric, height: fittingSize.height)
     }
 }
