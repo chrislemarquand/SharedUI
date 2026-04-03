@@ -87,14 +87,14 @@ public struct InspectorTokenField: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Color(NSColor.controlBackgroundColor))
+                .fill(Color(NSColor.controlColor))
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .strokeBorder(
-                    inputFocused ? Color.accentColor.opacity(0.8) : Color(NSColor.separatorColor),
-                    lineWidth: inputFocused ? 1.5 : 0.5
-                )
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .inset(by: -2.5)
+                .stroke(Color.accentColor, lineWidth: 3)
+                .opacity(inputFocused ? 1 : 0)
+                .animation(.easeInOut(duration: 0.1), value: inputFocused)
         )
         .contentShape(Rectangle())
         .onTapGesture { inputFocused = true }
