@@ -1,13 +1,17 @@
 import AppKit
 import SwiftUI
 
-/// A styled keyword token field matching the inspector's text field appearance.
-/// Return is the only tokenising character — comma is treated as literal within
-/// a keyword so that "Smith, John" is preserved as a single token.
+/// A keyword token field styled to match the inspector's text fields.
+/// Return is the only tokenising character so "Smith, John" is preserved as one token.
+/// Chips render in the app accent colour. The field grows vertically as tokens wrap.
 public struct InspectorTokenField: View {
     @Binding var text: String
     var placeholder: String
     var suggestions: [String]
+
+    @State private var inputText = ""
+    @State private var showSuggestions = false
+    @FocusState private var inputFocused: Bool
 
     public init(
         text: Binding<String>,
@@ -19,158 +23,183 @@ public struct InspectorTokenField: View {
         self.suggestions = suggestions
     }
 
+    // MARK: - Derived state
+
+    private var tokens: [String] {
+        guard !text.isEmpty else { return [] }
+        return text
+            .components(separatedBy: ", ")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private var filteredSuggestions: [String] {
+        guard !inputText.isEmpty else { return [] }
+        let lower = inputText.lowercased()
+        return suggestions.filter {
+            $0.lowercased().hasPrefix(lower) && !tokens.contains($0)
+        }
+    }
+
+    // MARK: - Actions
+
+    private func addCurrentInput() {
+        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var updated = tokens
+        if !updated.contains(trimmed) { updated.append(trimmed) }
+        text = updated.joined(separator: ", ")
+        inputText = ""
+        showSuggestions = false
+    }
+
+    private func remove(at index: Int) {
+        var updated = tokens
+        guard updated.indices.contains(index) else { return }
+        updated.remove(at: index)
+        text = updated.joined(separator: ", ")
+    }
+
+    // MARK: - Body
+
     public var body: some View {
-        TokenFieldRepresentable(text: $text, placeholder: placeholder, suggestions: suggestions)
-            .background(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(Color(NSColor.controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .strokeBorder(Color(NSColor.separatorColor), lineWidth: 0.5)
-            )
+        TokenFlowLayout(spacing: 4) {
+            ForEach(Array(tokens.enumerated()), id: \.offset) { index, token in
+                TokenChip(token: token) { remove(at: index) }
+            }
+            TextField(tokens.isEmpty ? placeholder : "", text: $inputText)
+                .textFieldStyle(.plain)
+                .focused($inputFocused)
+                .frame(minWidth: 44)
+                .onSubmit(addCurrentInput)
+                .onChange(of: inputText) { _, new in
+                    showSuggestions = inputFocused && !new.isEmpty && !filteredSuggestions.isEmpty
+                }
+                .onChange(of: inputFocused) { _, focused in
+                    if !focused { showSuggestions = false }
+                }
+                .popover(isPresented: $showSuggestions, arrowEdge: .bottom) {
+                    suggestionList
+                }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .strokeBorder(
+                    inputFocused ? Color.accentColor.opacity(0.8) : Color(NSColor.separatorColor),
+                    lineWidth: inputFocused ? 1.5 : 0.5
+                )
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { inputFocused = true }
+    }
+
+    // MARK: - Suggestion list
+
+    private var suggestionList: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(filteredSuggestions, id: \.self) { suggestion in
+                    Button {
+                        inputText = suggestion
+                        addCurrentInput()
+                    } label: {
+                        Text(suggestion)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .frame(minWidth: 160, maxHeight: 160)
     }
 }
 
-// MARK: - Representable
+// MARK: - Token chip
 
-private struct TokenFieldRepresentable: NSViewRepresentable {
-    @Binding var text: String
-    var placeholder: String
-    var suggestions: [String]
+private struct TokenChip: View {
+    let token: String
+    let onRemove: () -> Void
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    func makeNSView(context: Context) -> NSTokenField {
-        let field = NSTokenField()
-        field.tokenizingCharacterSet = .newlines
-        field.delegate = context.coordinator
-        field.placeholderString = placeholder
-        // Remove all AppKit chrome so the SwiftUI background/overlay show through.
-        field.isBordered = false
-        field.drawsBackground = false
-        field.backgroundColor = .clear
-        field.focusRingType = .none
-        // The CA layer paints its own white background even when drawsBackground = false.
-        // Force it transparent explicitly.
-        field.wantsLayer = true
-        field.layer?.backgroundColor = NSColor.clear.cgColor
-        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        context.coordinator.setTokens(in: field, from: text)
-        // KVO catches token deletions that don't fire controlTextDidChange
-        // (e.g. click-select a token then Delete key goes via deleteBackward:).
-        field.addObserver(context.coordinator, forKeyPath: "objectValue", options: .new, context: nil)
-        return field
-    }
-
-    func updateNSView(_ field: NSTokenField, context: Context) {
-        // Re-clear in case AppKit reinstates a layer background after hierarchy attachment.
-        field.layer?.backgroundColor = NSColor.clear.cgColor
-        context.coordinator.parent = self
-        field.placeholderString = placeholder
-        if !context.coordinator.isEditing {
-            context.coordinator.setTokens(in: field, from: text)
-        }
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSTokenField, context: Context) -> CGSize? {
-        guard let width = proposal.width, width > 0, let cell = nsView.cell else { return nil }
-        let height = cell.cellSize(
-            forBounds: NSRect(x: 0, y: 0, width: width, height: 10_000)
-        ).height
-        return CGSize(width: width, height: height)
-    }
-
-    static func dismantleNSView(_ nsView: NSTokenField, coordinator: Coordinator) {
-        nsView.removeObserver(coordinator, forKeyPath: "objectValue")
-    }
-
-    // MARK: - Coordinator
-
-    final class Coordinator: NSObject, NSTokenFieldDelegate {
-        var parent: TokenFieldRepresentable
-        var isEditing = false
-        // Prevents KVO re-entrancy when we programmatically set objectValue in setTokens.
-        private var isSettingTokens = false
-
-        init(parent: TokenFieldRepresentable) {
-            self.parent = parent
-        }
-
-        func setTokens(in field: NSTokenField, from string: String) {
-            let tokens = Self.tokens(from: string)
-            guard (field.objectValue as? [String]) != tokens else { return }
-            isSettingTokens = true
-            field.objectValue = tokens
-            isSettingTokens = false
-        }
-
-        static func tokens(from string: String) -> [String] {
-            string.isEmpty ? [] : string
-                .components(separatedBy: ", ")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-        }
-
-        static func string(from field: NSTokenField) -> String {
-            ((field.objectValue as? [String]) ?? []).joined(separator: ", ")
-        }
-
-        private func commit(from field: NSTokenField) {
-            let newText = Self.string(from: field)
-            if newText != parent.text {
-                parent.text = newText
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(token)
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
             }
+            .buttonStyle(.plain)
+        }
+        .font(.system(size: 11))
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+        .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.35), lineWidth: 0.5))
+        .foregroundStyle(Color.accentColor)
+    }
+}
+
+// MARK: - Flow layout
+
+private struct TokenFlowLayout: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = computeRows(subviews: subviews, width: proposal.width ?? 0)
+        guard !rows.isEmpty else { return CGSize(width: proposal.width ?? 0, height: 0) }
+        let height = rows.map(\.height).reduce(0) { $0 + $1 + spacing } - spacing
+        return CGSize(width: proposal.width ?? 0, height: max(0, height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let rows = computeRows(subviews: subviews, width: bounds.width)
+        var y = bounds.minY
+        for row in rows {
+            var x = bounds.minX
+            for item in row.items {
+                let yOffset = (row.height - item.size.height) / 2
+                item.subview.place(
+                    at: CGPoint(x: x, y: y + yOffset),
+                    proposal: ProposedViewSize(item.size)
+                )
+                x += item.size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct RowItem { let subview: LayoutSubview; let size: CGSize }
+
+    private struct Row {
+        var items: [RowItem] = []
+        var height: CGFloat { items.map(\.size.height).max() ?? 0 }
+    }
+
+    private func computeRows(subviews: Subviews, width: CGFloat) -> [Row] {
+        var rows: [Row] = [Row()]
+        var rowWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let wouldOverflow = !rows.last!.items.isEmpty && rowWidth + size.width > width
+            if wouldOverflow {
+                rows.append(Row())
+                rowWidth = 0
+            }
+            rows[rows.count - 1].items.append(RowItem(subview: subview, size: size))
+            rowWidth += size.width + spacing
         }
 
-        // MARK: KVO — catches token deletions that bypass controlTextDidChange
-
-        override func observeValue(
-            forKeyPath keyPath: String?,
-            of object: Any?,
-            change: [NSKeyValueChangeKey: Any]?,
-            context: UnsafeMutableRawPointer?
-        ) {
-            guard keyPath == "objectValue",
-                  !isSettingTokens,
-                  let field = object as? NSTokenField else { return }
-            commit(from: field)
-        }
-
-        // MARK: NSTokenFieldDelegate
-
-        func tokenField(
-            _ tokenField: NSTokenField,
-            completionsForSubstring substring: String,
-            indexOfToken tokenIndex: Int,
-            indexOfSelectedItem selectedIndex: UnsafeMutablePointer<Int>?
-        ) -> [Any]? {
-            guard !substring.isEmpty else { return nil }
-            let lower = substring.lowercased()
-            return parent.suggestions.filter { $0.lowercased().hasPrefix(lower) }
-        }
-
-        func tokenField(_ tokenField: NSTokenField, shouldAdd tokens: [Any], at index: Int) -> [Any] {
-            tokens
-        }
-
-        // MARK: NSControlTextEditingDelegate
-
-        func controlTextDidBeginEditing(_ obj: Notification) {
-            isEditing = true
-        }
-
-        func controlTextDidChange(_ obj: Notification) {
-            guard let field = obj.object as? NSTokenField else { return }
-            commit(from: field)
-        }
-
-        func controlTextDidEndEditing(_ obj: Notification) {
-            isEditing = false
-            guard let field = obj.object as? NSTokenField else { return }
-            commit(from: field)
-        }
+        return rows.filter { !$0.items.isEmpty }
     }
 }
