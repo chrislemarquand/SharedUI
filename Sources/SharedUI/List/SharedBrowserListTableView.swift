@@ -6,6 +6,11 @@ public final class SharedBrowserListTableView: NSTableView {
     public var contextMenuProvider: ((Int) -> NSMenu?)?
     public var onActivateSelection: (() -> Void)?
 
+    public override var style: NSTableView.Style {
+        get { .inset }
+        set { super.style = .inset }
+    }
+
     public override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
         let clickedRow = row(at: point)

@@ -135,6 +135,7 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         tableView.allowsEmptySelection = true
         tableView.gridStyleMask = []
         tableView.backgroundColor = .clear
+        tableView.style = .inset
         tableView.selectionHighlightStyle = .regular
         tableView.delegate = self
         tableView.dataSource = self
