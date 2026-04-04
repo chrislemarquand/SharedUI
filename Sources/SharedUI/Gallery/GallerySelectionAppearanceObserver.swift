@@ -9,6 +9,7 @@ public final class GallerySelectionAppearanceObserver {
     private var appDidBecomeActiveObserver: NSObjectProtocol?
     private var appDidResignActiveObserver: NSObjectProtocol?
     private var appAppearanceObservation: NSKeyValueObservation?
+    private var systemColorsObserver: NSObjectProtocol?
 
     public init(hostView: NSView, onAppearanceChange: @escaping @MainActor () -> Void) {
         self.hostView = hostView
@@ -63,6 +64,16 @@ public final class GallerySelectionAppearanceObserver {
             guard let self else { return }
             Task { @MainActor in self.onAppearanceChange() }
         }
+
+        // Fires when the user changes the system accent colour in System Settings.
+        systemColorsObserver = center.addObserver(
+            forName: NSColor.systemColorsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in self.onAppearanceChange() }
+        }
     }
 
     public func stop() {
@@ -85,5 +96,9 @@ public final class GallerySelectionAppearanceObserver {
         }
         appAppearanceObservation?.invalidate()
         appAppearanceObservation = nil
+        if let systemColorsObserver {
+            center.removeObserver(systemColorsObserver)
+            self.systemColorsObserver = nil
+        }
     }
 }
