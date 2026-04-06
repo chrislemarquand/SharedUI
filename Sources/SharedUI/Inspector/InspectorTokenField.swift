@@ -1,21 +1,22 @@
 import SwiftUI
 
-/// A keyword token field styled to match the inspector's text fields.
-/// Return is the only tokenising character so "Smith, John" is preserved as one token.
-/// Chips render in the app accent colour. The field grows vertically as tokens wrap.
 public struct InspectorTokenField: View {
     @Binding var text: String
     var placeholder: String
+    var onClearAll: (() -> Void)?
 
     @State private var inputText = ""
-    @State private var inputFocused = false
+    @FocusState private var inputFocused: Bool
+    @State private var isHovered = false
 
     public init(
         text: Binding<String>,
-        placeholder: String = ""
+        placeholder: String = "",
+        onClearAll: (() -> Void)? = nil
     ) {
         self._text = text
         self.placeholder = placeholder
+        self.onClearAll = onClearAll
     }
 
     // MARK: - Derived state
@@ -28,6 +29,10 @@ public struct InspectorTokenField: View {
             .filter { !$0.isEmpty }
     }
 
+    private var showClearButton: Bool {
+        isHovered && !tokens.isEmpty && onClearAll != nil
+    }
+
     // MARK: - Actions
 
     private func addCurrentInput() {
@@ -35,7 +40,9 @@ public struct InspectorTokenField: View {
         guard !trimmed.isEmpty else { return }
         var updated = tokens
         if !updated.contains(trimmed) { updated.append(trimmed) }
-        text = updated.joined(separator: ", ")
+        withAnimation(.spring(duration: 0.3, bounce: 0.25)) {
+            text = updated.joined(separator: ", ")
+        }
         inputText = ""
     }
 
@@ -43,70 +50,43 @@ public struct InspectorTokenField: View {
         var updated = tokens
         guard updated.indices.contains(index) else { return }
         updated.remove(at: index)
-        text = updated.joined(separator: ", ")
+        withAnimation(.spring(duration: 0.3, bounce: 0.25)) {
+            text = updated.joined(separator: ", ")
+        }
     }
 
     // MARK: - Body
 
     public var body: some View {
-        let currentTokens = tokens
+        VStack(alignment: .leading, spacing: 10) {
+            TextField(tokens.isEmpty ? placeholder : "Add keyword\u{2026}", text: $inputText)
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+                .onSubmit { addCurrentInput() }
+                .focused($inputFocused)
 
-        TokenFlowLayout(spacing: 4) {
-            ForEach(Array(currentTokens.enumerated()), id: \.element) { index, token in
-                TokenChip(token: token) {
-                    remove(at: index)
+            if !tokens.isEmpty {
+                TokenFlowLayout(spacing: 4) {
+                    ForEach(Array(tokens.enumerated()), id: \.element) { index, token in
+                        TokenChip(token: token) {
+                            remove(at: index)
+                        }
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    }
                 }
+                .overlay(alignment: .trailing) {
+                    if showClearButton {
+                        Button("Clear all keywords", systemImage: "xmark.circle.fill", action: onClearAll!)
+                            .buttonStyle(.plain)
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.secondary)
+                            .help("Clear all keywords")
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.1), value: showClearButton)
             }
-            KeywordInputField(
-                text: $inputText,
-                placeholder: currentTokens.isEmpty ? placeholder : "",
-                isFocused: $inputFocused,
-                onCommit: addCurrentInput,
-                onDeleteBackward: {
-                    guard !currentTokens.isEmpty else { return }
-                    remove(at: currentTokens.count - 1)
-                }
-            )
-            .frame(minWidth: 44)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // RoundedFieldBackground renders a real NSTextField bezel spanning the whole
-        // chip-container, giving the correct adaptive appearance inside NSVisualEffectView.
-        // The KeywordInputField inside is borderless; this is its visual frame.
-        .background(
-            RoundedFieldBackground()
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        )
+        .onHover { isHovered = $0 }
     }
 }
-
-// MARK: - Rounded field background
-
-/// Renders a real NSTextField bezel across the entire chip-container so the
-/// adaptive grey appearance inside NSVisualEffectView matches other inspector fields.
-/// sizeThatFits returns exactly the proposed size — the parent always proposes a
-/// concrete size, so there is no estimation instability.
-private struct RoundedFieldBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField(string: "")
-        field.isEditable = false
-        field.isSelectable = false
-        field.isBezeled = true
-        field.bezelStyle = .roundedBezel
-        field.drawsBackground = true
-        return field
-    }
-
-    func updateNSView(_ nsView: NSTextField, context: Context) {}
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSTextField, context: Context) -> CGSize? {
-        CGSize(
-            width: proposal.width ?? nsView.fittingSize.width,
-            height: proposal.height ?? nsView.fittingSize.height
-        )
-    }
-}
-
