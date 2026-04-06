@@ -265,8 +265,18 @@ public struct InspectorNSTokenField: NSViewRepresentable {
         @available(*, unavailable)
         required init?(coder: NSCoder) { fatalError() }
 
+        private var lastReportedHeight: CGFloat = 0
+
         public override var intrinsicContentSize: NSSize {
-            NSSize(width: NSView.noIntrinsicMetric, height: tokenField.intrinsicContentSize.height)
+            NSSize(width: NSView.noIntrinsicMetric, height: tokenField.fittingSize.height)
+        }
+
+        public override func layout() {
+            super.layout()
+            let newHeight = tokenField.fittingSize.height
+            guard newHeight != lastReportedHeight else { return }
+            lastReportedHeight = newHeight
+            invalidateIntrinsicContentSize()
         }
 
         public override func updateTrackingAreas() {
@@ -281,11 +291,17 @@ public struct InspectorNSTokenField: NSViewRepresentable {
             )
             addTrackingArea(area)
             trackingArea = area
+            // Correct hover state when the view scrolls out from under the cursor.
+            let mouseInWindow = window?.mouseLocationOutsideOfEventStream ?? .zero
+            if !bounds.contains(convert(mouseInWindow, from: nil)), isHovered {
+                isHovered = false
+                updateClearAllVisibility(hasTokens: !(tokenField.objectValue as? [String] ?? []).isEmpty)
+            }
         }
 
         public override func mouseEntered(with event: NSEvent) {
             isHovered = true
-            updateClearAllVisibility(hasTokens: clearAllButton?.isHidden == false || isHovered)
+            updateClearAllVisibility(hasTokens: !(tokenField.objectValue as? [String] ?? []).isEmpty)
         }
 
         public override func mouseExited(with event: NSEvent) {

@@ -29,7 +29,6 @@ public struct InspectorTextField: NSViewRepresentable {
     var onCommit: (() -> Void)?
     var onTab: (() -> Void)?
     var onShiftTab: (() -> Void)?
-    var trailingAction: (label: String, action: () -> Void)?
 
     public init(
         text: Binding<String>,
@@ -41,8 +40,7 @@ public struct InspectorTextField: NSViewRepresentable {
         onEscape: @escaping () -> Void,
         onCommit: (() -> Void)? = nil,
         onTab: (() -> Void)? = nil,
-        onShiftTab: (() -> Void)? = nil,
-        trailingAction: (label: String, action: () -> Void)? = nil
+        onShiftTab: (() -> Void)? = nil
     ) {
         _text = text
         self.placeholder = placeholder
@@ -54,7 +52,6 @@ public struct InspectorTextField: NSViewRepresentable {
         self.onCommit = onCommit
         self.onTab = onTab
         self.onShiftTab = onShiftTab
-        self.trailingAction = trailingAction
     }
 
     public func makeCoordinator() -> Coordinator {
@@ -81,8 +78,7 @@ public struct InspectorTextField: NSViewRepresentable {
         let container = ContainerView(
             field: field,
             coordinator: context.coordinator,
-            fieldLabel: fieldLabel,
-            trailingAction: trailingAction
+            fieldLabel: fieldLabel
         )
         context.coordinator.container = container
         context.coordinator.registerFocusObserver()
@@ -104,7 +100,6 @@ public struct InspectorTextField: NSViewRepresentable {
         if field.isEnabled != isEnabled {
             field.isEnabled = isEnabled
         }
-        context.coordinator.trailingAction = trailingAction?.action
         nsView.updateClearButtonVisibility()
     }
 
@@ -115,7 +110,6 @@ public struct InspectorTextField: NSViewRepresentable {
         fileprivate var parent: InspectorTextField
         fileprivate var isProgrammaticUpdate = false
         fileprivate weak var container: ContainerView?
-        fileprivate var trailingAction: (() -> Void)?
 
         fileprivate init(parent: InspectorTextField) {
             self.parent = parent
@@ -213,10 +207,6 @@ public struct InspectorTextField: NSViewRepresentable {
             container?.textField.stringValue = ""
             container?.updateClearButtonVisibility()
         }
-
-        @objc fileprivate func trailingButtonPressed() {
-            trailingAction?()
-        }
     }
 
     // MARK: - ContainerView
@@ -224,17 +214,11 @@ public struct InspectorTextField: NSViewRepresentable {
     public final class ContainerView: NSView {
         let textField: NSTextField
         private let clearButton: NSButton
-        private(set) var trailingButton: NSButton?
         private var trackingArea: NSTrackingArea?
         fileprivate var isEditing = false
         private var isHovered = false
 
-        init(
-            field: NSTextField,
-            coordinator: Coordinator,
-            fieldLabel: String,
-            trailingAction: (label: String, action: () -> Void)?
-        ) {
+        init(field: NSTextField, coordinator: Coordinator, fieldLabel: String) {
             textField = field
 
             let clear = NSButton(frame: .zero)
@@ -259,40 +243,17 @@ public struct InspectorTextField: NSViewRepresentable {
             addSubview(field)
             addSubview(clear)
 
-            var constraints: [NSLayoutConstraint] = [
+            NSLayoutConstraint.activate([
                 field.topAnchor.constraint(equalTo: topAnchor),
                 field.bottomAnchor.constraint(equalTo: bottomAnchor),
                 field.leadingAnchor.constraint(equalTo: leadingAnchor),
+                field.trailingAnchor.constraint(equalTo: trailingAnchor),
                 // Clear button overlaid at trailing edge of the text field
                 clear.trailingAnchor.constraint(equalTo: field.trailingAnchor, constant: -4),
                 clear.centerYAnchor.constraint(equalTo: field.centerYAnchor),
                 clear.widthAnchor.constraint(equalToConstant: 16),
                 clear.heightAnchor.constraint(equalToConstant: 16),
-            ]
-
-            if let action = trailingAction {
-                let btn = NSButton(
-                    title: action.label,
-                    target: coordinator,
-                    action: #selector(Coordinator.trailingButtonPressed)
-                )
-                btn.controlSize = .small
-                btn.bezelStyle = .rounded
-                btn.translatesAutoresizingMaskIntoConstraints = false
-                btn.setAccessibilityLabel(action.label)
-                addSubview(btn)
-                trailingButton = btn
-                coordinator.trailingAction = action.action
-                constraints += [
-                    field.trailingAnchor.constraint(equalTo: btn.leadingAnchor, constant: -6),
-                    btn.trailingAnchor.constraint(equalTo: trailingAnchor),
-                    btn.centerYAnchor.constraint(equalTo: centerYAnchor),
-                ]
-            } else {
-                constraints.append(field.trailingAnchor.constraint(equalTo: trailingAnchor))
-            }
-
-            NSLayoutConstraint.activate(constraints)
+            ])
         }
 
         @available(*, unavailable)
@@ -313,6 +274,14 @@ public struct InspectorTextField: NSViewRepresentable {
             )
             addTrackingArea(area)
             trackingArea = area
+            // Correct hover state when the view scrolls out from under the cursor.
+            // mouseExited only fires when the cursor moves; if the view moves (scroll)
+            // the cursor position in view-space changes without any mouse event firing.
+            let mouseInWindow = window?.mouseLocationOutsideOfEventStream ?? .zero
+            if !bounds.contains(convert(mouseInWindow, from: nil)), isHovered {
+                isHovered = false
+                updateClearButtonVisibility()
+            }
         }
 
         public override func mouseEntered(with event: NSEvent) {

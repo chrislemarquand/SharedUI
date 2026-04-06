@@ -18,28 +18,28 @@ public struct InspectorColourCircle: NSViewRepresentable {
 
     public func makeNSView(context: Context) -> ColourCircleView {
         let view = ColourCircleView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            view.widthAnchor.constraint(equalToConstant: size),
-            view.heightAnchor.constraint(equalToConstant: size),
-        ])
+        view.preferredSize = size
         return view
     }
 
     public func updateNSView(_ nsView: ColourCircleView, context: Context) {
-        if nsView.circleColor !== nsColor {
-            nsView.circleColor = nsColor
-            nsView.needsDisplay = true
-        }
+        // Always assign — NSColor object identity (===) is unreliable for dynamic
+        // colours; circleColor.didSet calls needsDisplay so no separate trigger needed.
+        nsView.circleColor = nsColor
+    }
+
+    public func sizeThatFits(_ proposal: ProposedViewSize, nsView: ColourCircleView, context: Context) -> CGSize? {
+        CGSize(width: size, height: size)
     }
 
     public final class ColourCircleView: NSView {
         var circleColor: NSColor = .clear {
             didSet { needsDisplay = true }
         }
+        var preferredSize: CGFloat = 16
 
         public override var intrinsicContentSize: NSSize {
-            bounds.isEmpty ? NSSize(width: 16, height: 16) : bounds.size
+            NSSize(width: preferredSize, height: preferredSize)
         }
 
         public override func draw(_ dirtyRect: NSRect) {
