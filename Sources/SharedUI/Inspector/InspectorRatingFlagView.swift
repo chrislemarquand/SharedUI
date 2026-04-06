@@ -182,10 +182,7 @@ public struct InspectorRatingFlagView: View {
                     strokeColor: labelIndicatorStrokeColor
                 )
             } else {
-                colorCircleImage(
-                    nsLabelColor,
-                    size: 16
-                )
+                InspectorColourCircle(nsColor: labelIndicatorColor, size: 16)
                 if labelPending {
                     Image(systemName: "circle")
                         .font(.system(size: 18))
@@ -213,6 +210,12 @@ public struct InspectorRatingFlagView: View {
         case "Purple": return .systemPurple
         default:       return .clear
         }
+    }
+
+    private var labelIndicatorColor: NSColor {
+        if isLabelPressed { return nsLabelColor.withSystemEffect(.pressed) }
+        if isLabelHovered { return nsLabelColor.withSystemEffect(.rollover) }
+        return nsLabelColor
     }
 
     private var labelIndicatorStrokeColor: NSColor {
