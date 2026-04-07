@@ -59,7 +59,11 @@ public struct InspectorTextField: NSViewRepresentable {
     }
 
     public func makeNSView(context: Context) -> ContainerView {
-        let field = NSTextField(frame: .zero)
+        let field = FocusAwareTextField(frame: .zero)
+        let coordinator = context.coordinator
+        field.onBecomeFirstResponder = { [weak coordinator] in
+            coordinator?.fieldDidBecomeFocused()
+        }
         field.isBezeled = true
         field.bezelStyle = .roundedBezel
         field.drawsBackground = true
@@ -151,8 +155,11 @@ public struct InspectorTextField: NSViewRepresentable {
             container?.updateClearButtonVisibility()
         }
 
-        public func controlTextDidBeginEditing(_ obj: Notification) {
+        fileprivate func fieldDidBecomeFocused() {
             parent.onFocusChange(true)
+        }
+
+        public func controlTextDidBeginEditing(_ obj: Notification) {
             if let field = obj.object as? NSTextField,
                let textView = field.currentEditor() as? NSTextView {
                 textView.isAutomaticSpellingCorrectionEnabled = false
@@ -206,6 +213,18 @@ public struct InspectorTextField: NSViewRepresentable {
             parent.text = ""
             container?.textField.stringValue = ""
             container?.updateClearButtonVisibility()
+        }
+    }
+
+    // MARK: - FocusAwareTextField
+
+    private final class FocusAwareTextField: NSTextField {
+        var onBecomeFirstResponder: (() -> Void)?
+
+        override func becomeFirstResponder() -> Bool {
+            let result = super.becomeFirstResponder()
+            if result { onBecomeFirstResponder?() }
+            return result
         }
     }
 
