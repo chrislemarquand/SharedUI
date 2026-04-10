@@ -24,6 +24,7 @@ public struct InspectorTextField: NSViewRepresentable {
     let fieldLabel: String
     let tagID: String
     var isEnabled: Bool
+    var isMixedValue: Bool
     let onFocusChange: (Bool) -> Void
     let onEscape: () -> Void
     var onCommit: (() -> Void)?
@@ -36,6 +37,7 @@ public struct InspectorTextField: NSViewRepresentable {
         fieldLabel: String,
         tagID: String,
         isEnabled: Bool = true,
+        isMixedValue: Bool = false,
         onFocusChange: @escaping (Bool) -> Void,
         onEscape: @escaping () -> Void,
         onCommit: (() -> Void)? = nil,
@@ -47,6 +49,7 @@ public struct InspectorTextField: NSViewRepresentable {
         self.fieldLabel = fieldLabel
         self.tagID = tagID
         self.isEnabled = isEnabled
+        self.isMixedValue = isMixedValue
         self.onFocusChange = onFocusChange
         self.onEscape = onEscape
         self.onCommit = onCommit
@@ -82,7 +85,8 @@ public struct InspectorTextField: NSViewRepresentable {
         let container = ContainerView(
             field: field,
             coordinator: context.coordinator,
-            fieldLabel: fieldLabel
+            fieldLabel: fieldLabel,
+            isMixedValue: isMixedValue
         )
         context.coordinator.container = container
         context.coordinator.registerFocusObserver()
@@ -104,6 +108,7 @@ public struct InspectorTextField: NSViewRepresentable {
         if field.isEnabled != isEnabled {
             field.isEnabled = isEnabled
         }
+        nsView.isMixedValue = isMixedValue
         nsView.updateClearButtonVisibility()
     }
 
@@ -236,8 +241,10 @@ public struct InspectorTextField: NSViewRepresentable {
         private var trackingArea: NSTrackingArea?
         fileprivate var isEditing = false
         private var isHovered = false
+        fileprivate var isMixedValue: Bool
 
-        init(field: NSTextField, coordinator: Coordinator, fieldLabel: String) {
+        init(field: NSTextField, coordinator: Coordinator, fieldLabel: String, isMixedValue: Bool) {
+            self.isMixedValue = isMixedValue
             textField = field
 
             let clear = NSButton(frame: .zero)
@@ -314,9 +321,8 @@ public struct InspectorTextField: NSViewRepresentable {
         }
 
         fileprivate func updateClearButtonVisibility() {
-            let show = !textField.stringValue.isEmpty
-                && (isHovered || isEditing)
-                && textField.isEnabled
+            let hasContent = !textField.stringValue.isEmpty || isMixedValue
+            let show = hasContent && (isHovered || isEditing) && textField.isEnabled
             clearButton.isHidden = !show
         }
     }
