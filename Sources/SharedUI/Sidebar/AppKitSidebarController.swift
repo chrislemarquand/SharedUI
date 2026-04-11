@@ -159,6 +159,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
         scrollView.scrollerStyle = .overlay
+        scrollView.automaticallyAdjustsContentInsets = false
 
         view = scrollView
     }
