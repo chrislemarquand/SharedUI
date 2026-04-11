@@ -25,6 +25,7 @@ public struct InspectorTextField: NSViewRepresentable {
     let tagID: String
     var isEnabled: Bool
     var isMixedValue: Bool
+    var editingPrefix: String?
     let onFocusChange: (Bool) -> Void
     let onEscape: () -> Void
     var onCommit: (() -> Void)?
@@ -38,6 +39,7 @@ public struct InspectorTextField: NSViewRepresentable {
         tagID: String,
         isEnabled: Bool = true,
         isMixedValue: Bool = false,
+        editingPrefix: String? = nil,
         onFocusChange: @escaping (Bool) -> Void,
         onEscape: @escaping () -> Void,
         onCommit: (() -> Void)? = nil,
@@ -50,6 +52,7 @@ public struct InspectorTextField: NSViewRepresentable {
         self.tagID = tagID
         self.isEnabled = isEnabled
         self.isMixedValue = isMixedValue
+        self.editingPrefix = editingPrefix
         self.onFocusChange = onFocusChange
         self.onEscape = onEscape
         self.onCommit = onCommit
@@ -97,7 +100,7 @@ public struct InspectorTextField: NSViewRepresentable {
         context.coordinator.parent = self
         let field = nsView.textField
 
-        if field.stringValue != text {
+        if field.stringValue != text, !context.coordinator.isShowingEditingPrefix {
             context.coordinator.isProgrammaticUpdate = true
             field.stringValue = text
             context.coordinator.isProgrammaticUpdate = false
@@ -118,6 +121,7 @@ public struct InspectorTextField: NSViewRepresentable {
     public final class Coordinator: NSObject, NSTextFieldDelegate {
         fileprivate var parent: InspectorTextField
         fileprivate var isProgrammaticUpdate = false
+        fileprivate var isShowingEditingPrefix = false
         fileprivate weak var container: ContainerView?
 
         fileprivate init(parent: InspectorTextField) {
@@ -156,12 +160,23 @@ public struct InspectorTextField: NSViewRepresentable {
             guard !isProgrammaticUpdate,
                   let field = obj.object as? NSTextField
             else { return }
+            isShowingEditingPrefix = false
             parent.text = field.stringValue
             container?.updateClearButtonVisibility()
         }
 
         fileprivate func fieldDidBecomeFocused() {
             parent.onFocusChange(true)
+            guard let prefix = parent.editingPrefix,
+                  let field = container?.textField,
+                  field.stringValue.isEmpty
+            else { return }
+            isShowingEditingPrefix = true
+            field.stringValue = prefix
+            DispatchQueue.main.async { [weak field] in
+                guard let editor = field?.currentEditor() else { return }
+                editor.selectedRange = NSRange(location: editor.string.count, length: 0)
+            }
         }
 
         public func controlTextDidBeginEditing(_ obj: Notification) {
@@ -179,6 +194,7 @@ public struct InspectorTextField: NSViewRepresentable {
         }
 
         public func controlTextDidEndEditing(_ obj: Notification) {
+            isShowingEditingPrefix = false
             parent.onFocusChange(false)
             container?.isEditing = false
             container?.updateClearButtonVisibility()
