@@ -20,6 +20,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     public var onSelectionChange: ((Item) -> Void)?
     public var menuProvider: ((Item) -> NSMenu?)?
     public var onItemsReordered: (([Item]) -> Void)?
+    public var onItemPromotedToSection: ((Item, Section) -> Void)?
 
     public init(
         sections: [Section],
@@ -222,9 +223,8 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
 
         proxy.pasteboardWriterForItem = { [weak self] item in
             guard let self, let box = item as? ItemBox else { return nil }
-            guard box.item.isSidebarReorderable, let reorderID = box.item.sidebarReorderID else {
-                return nil
-            }
+            let canDrag = box.item.isSidebarReorderable || !box.item.sidebarPromotionTargets.isEmpty
+            guard canDrag, let reorderID = box.item.sidebarReorderID else { return nil }
             let pasteboardItem = NSPasteboardItem()
             pasteboardItem.setString(reorderID, forType: self.dragPasteboardType)
             return pasteboardItem
@@ -249,8 +249,15 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         guard proposedChildIndex != NSOutlineViewDropOnItemIndex else { return [] }
         guard let sectionBox = proposedItem as? SectionBox else { return [] }
         guard let reorderID = draggedReorderID(from: info) else { return [] }
-        guard let movingItem = item(forReorderID: reorderID), movingItem.isSidebarReorderable else { return [] }
-        guard movingItem.section == sectionBox.section else { return [] }
+        guard let movingItem = item(forReorderID: reorderID) else { return [] }
+
+        if movingItem.section != sectionBox.section {
+            guard onItemPromotedToSection != nil else { return [] }
+            guard movingItem.sidebarPromotionTargets.contains(sectionBox.section) else { return [] }
+            return .move
+        }
+
+        guard movingItem.isSidebarReorderable else { return [] }
         let sectionItems = items.filter { $0.section == sectionBox.section }
         let reorderableCount = sectionItems.filter(\.isSidebarReorderable).count
         return reorderableCount > 1 ? .move : []
@@ -260,8 +267,15 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         guard childIndex != NSOutlineViewDropOnItemIndex else { return false }
         guard let sectionBox = proposedItem as? SectionBox else { return false }
         guard let reorderID = draggedReorderID(from: info) else { return false }
-        guard let movingItem = item(forReorderID: reorderID), movingItem.isSidebarReorderable else { return false }
-        guard movingItem.section == sectionBox.section else { return false }
+        guard let movingItem = item(forReorderID: reorderID) else { return false }
+
+        if movingItem.section != sectionBox.section {
+            guard movingItem.sidebarPromotionTargets.contains(sectionBox.section) else { return false }
+            onItemPromotedToSection?(movingItem, sectionBox.section)
+            return true
+        }
+
+        guard movingItem.isSidebarReorderable else { return false }
         guard let reordered = reorderedItemsInSection(movingReorderID: reorderID, section: sectionBox.section, destinationSectionIndex: childIndex) else {
             return false
         }

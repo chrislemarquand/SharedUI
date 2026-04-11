@@ -12,9 +12,11 @@ public protocol AppKitSidebarItemType: Hashable {
     var badgeText: String? { get }
     var sidebarReorderID: String? { get }
     var isSidebarReorderable: Bool { get }
+    var sidebarPromotionTargets: Set<SectionType> { get }
 }
 
 public extension AppKitSidebarItemType {
     var sidebarReorderID: String? { nil }
     var isSidebarReorderable: Bool { false }
+    var sidebarPromotionTargets: Set<SectionType> { [] }
 }
