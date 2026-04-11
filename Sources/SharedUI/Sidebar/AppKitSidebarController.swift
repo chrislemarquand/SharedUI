@@ -65,7 +65,9 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         }
 
         if let prev = previouslySelected {
+            isSuppressingSelectionCallbacks = true
             selectItem(where: { $0 == prev })
+            isSuppressingSelectionCallbacks = false
         }
     }
 
@@ -73,7 +75,9 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         for row in 0..<outlineView.numberOfRows {
             guard let box = outlineView.item(atRow: row) as? ItemBox,
                   predicate(box.item) else { continue }
+            isSuppressingSelectionCallbacks = true
             outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            isSuppressingSelectionCallbacks = false
             break
         }
     }
@@ -94,6 +98,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     private var scrollView: NSScrollView!
     private let proxy = OutlineProxy()
     private let dragPasteboardType = NSPasteboard.PasteboardType("com.sharedui.sidebar.reorder-item")
+    private var isSuppressingSelectionCallbacks = false
 
     // Stable reference-type boxes so NSOutlineView gets consistent identity across calls.
     private var orderedSectionBoxes: [SectionBox] = []
@@ -218,6 +223,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
                 return
             }
             selectedItem = box.item
+            guard !isSuppressingSelectionCallbacks else { return }
             onSelectionChange?(box.item)
         }
 
