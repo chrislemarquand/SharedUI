@@ -99,6 +99,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     private let proxy = OutlineProxy()
     private let dragPasteboardType = NSPasteboard.PasteboardType("com.sharedui.sidebar.reorder-item")
     private var isSuppressingSelectionCallbacks = false
+    private var didApplyInitialScrollPosition = false
 
     // Stable reference-type boxes so NSOutlineView gets consistent identity across calls.
     private var orderedSectionBoxes: [SectionBox] = []
@@ -159,9 +160,25 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
         scrollView.scrollerStyle = .overlay
-        scrollView.automaticallyAdjustsContentInsets = false
 
         view = scrollView
+    }
+
+    override public func viewDidLayout() {
+        super.viewDidLayout()
+        applyInitialScrollPositionIfNeeded()
+    }
+
+    private func applyInitialScrollPositionIfNeeded() {
+        guard !didApplyInitialScrollPosition else { return }
+        // automaticallyAdjustsContentInsets applies a top inset (toolbar height) after
+        // the initial layout pass but does not retroactively correct the clip view's
+        // scroll origin. Without this, the content sits below its intended position
+        // and snaps upward on the first user click. Scrolling to .zero once the inset
+        // is non-zero pre-applies the correction.
+        guard scrollView.contentInsets.top > 0 else { return }
+        didApplyInitialScrollPosition = true
+        scrollView.documentView?.scroll(.zero)
     }
 
     override public func viewDidLoad() {
