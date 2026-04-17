@@ -7,10 +7,12 @@ import AppKit
 ///   - appName: The localised display name shown in About, Hide, and Quit items.
 ///   - aboutAction: Selector for the About item. Defaults to the system About panel.
 ///   - settingsAction: Selector for Settings… (⌘,). Dispatched via the responder chain.
+@MainActor
 public func makeStandardAppMenu(
     appName: String,
     aboutAction: Selector = #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
-    settingsAction: Selector
+    settingsAction: Selector,
+    checkForUpdatesAction: Selector? = nil
 ) -> NSMenu {
     let menu = NSMenu(title: appName)
 
@@ -23,6 +25,17 @@ public func makeStandardAppMenu(
     settingsItem.keyEquivalentModifierMask = .command
     settingsItem.image = NSImage(systemSymbolName: "gear", accessibilityDescription: nil)
     menu.addItem(settingsItem)
+
+    if let checkForUpdatesAction {
+        let checkForUpdatesItem = NSMenuItem(
+            title: "Check for Updates…",
+            action: checkForUpdatesAction,
+            keyEquivalent: ""
+        )
+        checkForUpdatesItem.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
+        menu.addItem(checkForUpdatesItem)
+    }
+
     menu.addItem(.separator())
 
     let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")
@@ -69,6 +82,7 @@ public func makeStandardAppMenu(
 /// Returns a fully configured standard Window menu.
 /// After adding its wrapper NSMenuItem to NSApp.mainMenu, assign the
 /// returned menu to NSApp.windowsMenu so AppKit manages open windows automatically.
+@MainActor
 public func makeStandardWindowMenu() -> NSMenu {
     let menu = NSMenu(title: "Window")
 
