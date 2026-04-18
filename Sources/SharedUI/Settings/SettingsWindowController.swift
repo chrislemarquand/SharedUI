@@ -122,6 +122,7 @@ private final class SettingsTabViewController: NSTabViewController {
         var targetFrame = frame
         targetFrame.size.width += widthDelta
         targetFrame.size.height += heightDelta
+        targetFrame.origin.x -= widthDelta / 2
         targetFrame.origin.y -= heightDelta
         let constrainedFrame = window.constrainFrameRect(targetFrame, to: window.screen)
         window.setFrame(constrainedFrame, display: true, animate: animated)
