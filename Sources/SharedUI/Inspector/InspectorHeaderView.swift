@@ -2,13 +2,17 @@ import SwiftUI
 
 public struct InspectorHeaderView<Actions: View>: View {
     let title: String
-    let subtitle: String?
+    let subtitles: [String]
     let pendingChange: Bool
     let actions: Actions
 
     public init(title: String, subtitle: String?, pendingChange: Bool = false, @ViewBuilder actions: () -> Actions) {
+        self.init(title: title, subtitles: subtitle.map { [$0] } ?? [], pendingChange: pendingChange, actions: actions)
+    }
+
+    public init(title: String, subtitles: [String], pendingChange: Bool = false, @ViewBuilder actions: () -> Actions) {
         self.title = title
-        self.subtitle = subtitle
+        self.subtitles = subtitles
         self.pendingChange = pendingChange
         self.actions = actions()
     }
@@ -26,7 +30,7 @@ public struct InspectorHeaderView<Actions: View>: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            if let subtitle {
+            ForEach(subtitles, id: \.self) { subtitle in
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -43,5 +47,9 @@ public struct InspectorHeaderView<Actions: View>: View {
 public extension InspectorHeaderView where Actions == EmptyView {
     init(title: String, subtitle: String?, pendingChange: Bool = false) {
         self.init(title: title, subtitle: subtitle, pendingChange: pendingChange) { EmptyView() }
+    }
+
+    init(title: String, subtitles: [String], pendingChange: Bool = false) {
+        self.init(title: title, subtitles: subtitles, pendingChange: pendingChange) { EmptyView() }
     }
 }
