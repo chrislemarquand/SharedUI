@@ -21,6 +21,8 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     public var menuProvider: ((Item) -> NSMenu?)?
     public var onItemsReordered: (([Item]) -> Void)?
     public var onItemPromotedToSection: ((Item, Section) -> Void)?
+    /// Set to enable inline rename on double-click. When nil, double-click has no effect.
+    public var onRenameItem: ((Item, String) -> Void)?
 
     public init(
         sections: [Section],
@@ -98,6 +100,24 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         view.window?.makeFirstResponder(outlineView)
     }
 
+    /// Programmatically begins inline rename on the first item matching the predicate.
+    /// No-op if `onRenameItem` is not set.
+    public func beginRenaming(itemWhere predicate: (Item) -> Bool) {
+        guard onRenameItem != nil else { return }
+        for row in 0..<outlineView.numberOfRows {
+            guard let box = outlineView.item(atRow: row) as? ItemBox,
+                  predicate(box.item),
+                  let cell = outlineView.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView
+            else { continue }
+            let item = box.item
+            cell.beginRenaming(
+                onCommit: { [weak self] newName in self?.onRenameItem?(item, newName) },
+                onCancel: {}
+            )
+            return
+        }
+    }
+
     // MARK: - Private state
 
     private var outlineView: SidebarOutlineView!
@@ -144,6 +164,8 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         outlineView.focusRingType = .none
         outlineView.registerForDraggedTypes([dragPasteboardType])
         outlineView.setDraggingSourceOperationMask(.move, forLocal: true)
+        outlineView.target = proxy
+        outlineView.doubleAction = #selector(OutlineProxy.handleDoubleClick)
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
         column.isEditable = false
@@ -268,6 +290,20 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         proxy.acceptDrop = { [weak self] info, item, childIndex in
             guard let self else { return false }
             return self.acceptDrop(info: info, proposedItem: item, childIndex: childIndex)
+        }
+
+        proxy.doubleAction = { [weak self] in
+            guard let self, onRenameItem != nil else { return }
+            let row = outlineView.clickedRow
+            guard row >= 0,
+                  let box = outlineView.item(atRow: row) as? ItemBox,
+                  let cell = outlineView.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView
+            else { return }
+            let item = box.item
+            cell.beginRenaming(
+                onCommit: { [weak self] newName in self?.onRenameItem?(item, newName) },
+                onCancel: {}
+            )
         }
     }
 
@@ -417,9 +453,14 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             icon.translatesAutoresizingMaskIntoConstraints = false
             icon.imageScaling = .scaleNone
 
-            let titleField = NSTextField(labelWithString: "")
-            titleField.translatesAutoresizingMaskIntoConstraints = false
+            let titleField = NSTextField()
+            titleField.isEditable = false
+            titleField.isSelectable = false
+            titleField.isBordered = false
+            titleField.drawsBackground = false
             titleField.lineBreakMode = .byTruncatingTail
+            titleField.cell?.isScrollable = true
+            titleField.translatesAutoresizingMaskIntoConstraints = false
 
             let countField = NSTextField(labelWithString: "")
             countField.translatesAutoresizingMaskIntoConstraints = false
@@ -501,6 +542,11 @@ final class OutlineProxy: NSObject, NSOutlineViewDataSource, NSOutlineViewDelega
     var pasteboardWriterForItem: ((Any) -> NSPasteboardWriting?)?
     var validateDrop: ((NSDraggingInfo, Any?, Int) -> NSDragOperation)?
     var acceptDrop: ((NSDraggingInfo, Any?, Int) -> Bool)?
+    var doubleAction: (() -> Void)?
+
+    @objc func handleDoubleClick() {
+        doubleAction?()
+    }
 
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
         numberOfChildrenOfItem?(item) ?? 0

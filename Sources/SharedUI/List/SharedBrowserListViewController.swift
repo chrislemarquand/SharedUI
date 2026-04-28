@@ -47,6 +47,10 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     private var isApplyingProgrammaticSort = false
 
     public var contextMenuProvider: ((Int) -> NSMenu?)?
+    /// When true, rows can be reordered by dragging. `onRowReordered` is called with
+    /// the source row index and the destination row index (after removal of the source row).
+    public var canReorderRows: Bool = false
+    public var onRowReordered: ((_ from: Int, _ to: Int) -> Void)?
 
     public init(
         columns: [SharedListColumnDefinition],
@@ -137,6 +141,8 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         tableView.selectionHighlightStyle = .regular
         tableView.delegate = self
         tableView.dataSource = self
+        tableView.registerForDraggedTypes([Self.reorderPasteboardType])
+        tableView.setDraggingSourceOperationMask(.move, forLocal: true)
 
         tableView.contextMenuProvider = { [weak self] row in
             self?.contextMenuProvider?(row)
@@ -303,5 +309,44 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     public func tableView(_ tableView: NSTableView, sortDescriptorsDidChange _: [NSSortDescriptor]) {
         guard !isApplyingProgrammaticSort else { return }
         host?.sharedBrowserListSortDidChange(self, descriptor: tableView.sortDescriptors.first)
+    }
+
+    // MARK: - Row reorder (opt-in via canReorderRows)
+
+    private static let reorderPasteboardType = NSPasteboard.PasteboardType("com.sharedui.list.reorder-row")
+
+    public func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard canReorderRows else { return nil }
+        let item = NSPasteboardItem()
+        item.setString("\(row)", forType: Self.reorderPasteboardType)
+        return item
+    }
+
+    public func tableView(
+        _ tableView: NSTableView,
+        validateDrop info: NSDraggingInfo,
+        proposedRow row: Int,
+        proposedDropOperation operation: NSTableView.DropOperation
+    ) -> NSDragOperation {
+        guard canReorderRows, operation == .above else { return [] }
+        return .move
+    }
+
+    public func tableView(
+        _ tableView: NSTableView,
+        acceptDrop info: NSDraggingInfo,
+        row: Int,
+        dropOperation: NSTableView.DropOperation
+    ) -> Bool {
+        guard canReorderRows,
+              let sourceString = info.draggingPasteboard.string(forType: Self.reorderPasteboardType),
+              let sourceRow = Int(sourceString)
+        else { return false }
+
+        // Destination row accounts for removal of the source row.
+        let destRow = row > sourceRow ? row - 1 : row
+        guard destRow != sourceRow else { return false }
+        onRowReordered?(sourceRow, destRow)
+        return true
     }
 }
