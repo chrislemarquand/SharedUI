@@ -7,4 +7,7 @@
    <FileRef
       location = "absolute:/Users/chrislemarquand/Xcode Projects/Ledger/Ledger.xcodeproj">
    </FileRef>
+   <FileRef
+      location = "absolute:/Users/chrislemarquand/Xcode Projects/Ripcord/Ripcord.xcodeproj">
+   </FileRef>
 </Workspace>
