@@ -328,7 +328,11 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         proposedRow row: Int,
         proposedDropOperation operation: NSTableView.DropOperation
     ) -> NSDragOperation {
-        guard canReorderRows, operation == .above else { return [] }
+        guard canReorderRows else { return [] }
+        // Force all drops to land between rows (.above), never onto a row (.on).
+        // Without this, releasing over a row centre proposes .on, validateDrop returns [],
+        // and acceptDrop is never called.
+        tableView.setDropRow(row, dropOperation: .above)
         return .move
     }
 
