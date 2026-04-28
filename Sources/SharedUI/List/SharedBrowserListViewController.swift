@@ -256,15 +256,17 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         let othersWidth = nonPrimary.reduce(0.0) { $0 + $1.width }
         let minTotal = othersWidth + primaryColumn.minWidth
 
+        tableView.autoresizingMask = []
         if minTotal > viewportWidth {
-            tableView.autoresizingMask = []
             primaryColumn.width = primaryColumn.minWidth
             var frame = tableView.frame
             frame.size.width = ceil(minTotal)
             tableView.frame = frame
         } else {
-            tableView.autoresizingMask = [.width]
             primaryColumn.width = max(primaryColumn.minWidth, floor(viewportWidth - othersWidth))
+            var frame = tableView.frame
+            frame.size.width = floor(viewportWidth)
+            tableView.frame = frame
         }
         tableView.tile()
     }
