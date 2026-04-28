@@ -131,7 +131,7 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         tableView.usesAutomaticRowHeights = false
         tableView.rowHeight = layoutConfig.rowHeight
         tableView.headerView = NSTableHeaderView()
-        tableView.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
+        tableView.columnAutoresizingStyle = .noColumnAutoresizing
         tableView.allowsColumnResizing = true
         tableView.allowsMultipleSelection = true
         tableView.allowsEmptySelection = true
@@ -265,7 +265,6 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         } else {
             tableView.autoresizingMask = [.width]
             primaryColumn.width = max(primaryColumn.minWidth, floor(viewportWidth - othersWidth))
-            syncTableWidthToViewportIfNeeded()
         }
         tableView.tile()
     }
