@@ -44,7 +44,6 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     private let persistence: SharedListPersistenceConfig
     private let layoutConfig: SharedListLayoutConfig
     private var columnStore: SharedListColumnStore
-    private var isInColumnOverflow = false
     private var isApplyingProgrammaticSort = false
 
     public var contextMenuProvider: ((Int) -> NSMenu?)?
@@ -81,21 +80,20 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
 
     public override func viewDidLayout() {
         super.viewDidLayout()
-        syncTableWidthToViewportIfNeeded()
+        fitTableToViewportIfNeeded()
         applyInitialColumnFitIfNeeded()
-        exitOverflowIfViewportFits()
         updateListPresentationState(hasItems: tableView.numberOfRows > 0)
     }
 
     public override func viewDidAppear() {
         super.viewDidAppear()
-        syncTableWidthToViewportIfNeeded()
+        fitTableToViewportIfNeeded()
         applyInitialColumnFitIfNeeded()
     }
 
     public func reloadData() {
         tableView.reloadData()
-        syncTableWidthToViewportIfNeeded()
+        fitTableToViewportIfNeeded()
         applyInitialColumnFitIfNeeded()
         updateListPresentationState(hasItems: tableView.numberOfRows > 0)
     }
@@ -228,7 +226,6 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     }
 
     private func syncTableWidthToViewportIfNeeded() {
-        guard !isInColumnOverflow else { return }
         let width = scrollView.contentView.bounds.width
         guard width > 0 else { return }
         if abs(tableView.frame.width - width) > 0.5 {
@@ -236,6 +233,35 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
             frame.size.width = width
             tableView.frame = frame
         }
+    }
+
+    private func fitTableToViewportIfNeeded() {
+        let viewportWidth = scrollView.contentView.bounds.width
+        guard viewportWidth > 0 else { return }
+        guard let primaryColumn = tableView.tableColumns.first(where: {
+            $0.identifier.rawValue == layoutConfig.primaryColumnID
+        }) else {
+            syncTableWidthToViewportIfNeeded()
+            return
+        }
+        let nonPrimary = tableView.tableColumns.filter {
+            !$0.isHidden && $0.identifier.rawValue != layoutConfig.primaryColumnID
+        }
+        let othersWidth = nonPrimary.reduce(0.0) { $0 + $1.width }
+        let minTotal = othersWidth + primaryColumn.minWidth
+
+        if minTotal > viewportWidth {
+            tableView.autoresizingMask = []
+            primaryColumn.width = primaryColumn.minWidth
+            var frame = tableView.frame
+            frame.size.width = ceil(minTotal)
+            tableView.frame = frame
+        } else {
+            tableView.autoresizingMask = [.width]
+            primaryColumn.width = max(primaryColumn.minWidth, floor(viewportWidth - othersWidth))
+            syncTableWidthToViewportIfNeeded()
+        }
+        tableView.tile()
     }
 
     private func applyInitialColumnFitIfNeeded() {
@@ -255,50 +281,7 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     }
 
     private func adjustTableForColumnToggle() {
-        let viewportWidth = scrollView.contentView.bounds.width
-        guard viewportWidth > 0 else { return }
-        guard let primaryColumn = tableView.tableColumns.first(where: {
-            $0.identifier.rawValue == layoutConfig.primaryColumnID
-        }) else { return }
-        let nonPrimary = tableView.tableColumns.filter {
-            !$0.isHidden && $0.identifier.rawValue != layoutConfig.primaryColumnID
-        }
-        let othersWidth = nonPrimary.reduce(0.0) { $0 + $1.width }
-        let minTotal = othersWidth + primaryColumn.minWidth
-
-        if minTotal > viewportWidth {
-            isInColumnOverflow = true
-            tableView.autoresizingMask = []
-            primaryColumn.width = primaryColumn.minWidth
-            var frame = tableView.frame
-            frame.size.width = ceil(minTotal)
-            tableView.frame = frame
-        } else {
-            isInColumnOverflow = false
-            tableView.autoresizingMask = [.width]
-            primaryColumn.width = max(primaryColumn.minWidth, floor(viewportWidth - othersWidth))
-            syncTableWidthToViewportIfNeeded()
-        }
-        tableView.tile()
-    }
-
-    private func exitOverflowIfViewportFits() {
-        guard isInColumnOverflow else { return }
-        let viewportWidth = scrollView.contentView.bounds.width
-        guard viewportWidth > 0 else { return }
-        guard let primaryColumn = tableView.tableColumns.first(where: {
-            $0.identifier.rawValue == layoutConfig.primaryColumnID
-        }) else { return }
-        let nonPrimary = tableView.tableColumns.filter {
-            !$0.isHidden && $0.identifier.rawValue != layoutConfig.primaryColumnID
-        }
-        let othersWidth = nonPrimary.reduce(0.0) { $0 + $1.width }
-        guard othersWidth + primaryColumn.minWidth <= viewportWidth else { return }
-        isInColumnOverflow = false
-        tableView.autoresizingMask = [.width]
-        primaryColumn.width = max(primaryColumn.minWidth, floor(viewportWidth - othersWidth))
-        syncTableWidthToViewportIfNeeded()
-        tableView.tile()
+        fitTableToViewportIfNeeded()
     }
 
     public func numberOfRows(in _: NSTableView) -> Int {
