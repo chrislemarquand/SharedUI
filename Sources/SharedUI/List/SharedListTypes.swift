@@ -66,14 +66,17 @@ public struct SharedListLayoutConfig: Sendable, Hashable {
     public let primaryColumnID: String
     public let rowHeight: CGFloat
     public let hasHorizontalScroller: Bool
+    public let lockedColumnIDs: Set<String>
 
     public init(
         primaryColumnID: String,
         rowHeight: CGFloat,
-        hasHorizontalScroller: Bool = true
+        hasHorizontalScroller: Bool = true,
+        lockedColumnIDs: Set<String> = []
     ) {
         self.primaryColumnID = primaryColumnID
         self.rowHeight = rowHeight
         self.hasHorizontalScroller = hasHorizontalScroller
+        self.lockedColumnIDs = lockedColumnIDs
     }
 }

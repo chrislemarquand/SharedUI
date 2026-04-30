@@ -130,7 +130,9 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         tableView.autoresizingMask = [.width]
         tableView.usesAutomaticRowHeights = false
         tableView.rowHeight = layoutConfig.rowHeight
-        tableView.headerView = NSTableHeaderView()
+        let headerView = SharedBrowserListHeaderView()
+        headerView.lockedColumnIDs = layoutConfig.lockedColumnIDs
+        tableView.headerView = headerView
         tableView.columnAutoresizingStyle = .noColumnAutoresizing
         tableView.allowsColumnResizing = true
         tableView.allowsMultipleSelection = true
@@ -310,6 +312,28 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     public func tableView(_ tableView: NSTableView, sortDescriptorsDidChange _: [NSSortDescriptor]) {
         guard !isApplyingProgrammaticSort else { return }
         host?.sharedBrowserListSortDidChange(self, descriptor: tableView.sortDescriptors.first)
+    }
+
+    public func tableView(_ tableView: NSTableView, shouldSelect tableColumn: NSTableColumn?) -> Bool {
+        guard let tableColumn else { return true }
+        return !layoutConfig.lockedColumnIDs.contains(tableColumn.identifier.rawValue)
+    }
+
+    public func tableView(
+        _ tableView: NSTableView,
+        shouldReorderColumn columnIndex: Int,
+        toColumn newColumnIndex: Int
+    ) -> Bool {
+        guard tableView.tableColumns.indices.contains(columnIndex) else { return false }
+        let movingColumnID = tableView.tableColumns[columnIndex].identifier.rawValue
+        if layoutConfig.lockedColumnIDs.contains(movingColumnID) {
+            return false
+        }
+
+        let leadingLockedColumnCount = tableView.tableColumns.prefix {
+            layoutConfig.lockedColumnIDs.contains($0.identifier.rawValue)
+        }.count
+        return newColumnIndex < 0 || newColumnIndex >= leadingLockedColumnCount
     }
 
     // MARK: - Row reorder (opt-in via canReorderRows)
