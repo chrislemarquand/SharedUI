@@ -199,16 +199,31 @@ open class ThreePaneSplitViewController: NSSplitViewController {
 
     // MARK: - Inspector toggle
 
+    /// Toggles the sidebar with animation, preserving first-responder focus.
+    @objc override public func toggleSidebar(_ sender: Any?) {
+        let previousResponder = view.window?.firstResponder
+        super.toggleSidebar(sender)
+        schedulePaneStateSync()
+        restoreFocusAfterPaneToggle(previousResponder)
+    }
+
     /// Toggles the inspector with animation, preserving first-responder focus.
     @objc override public func toggleInspector(_ sender: Any?) {
         let previousResponder = view.window?.firstResponder
         inspectorItem.animator().isCollapsed.toggle()
         schedulePaneStateSync()
+        restoreFocusAfterPaneToggle(previousResponder)
+    }
+
+    private func restoreFocusAfterPaneToggle(_ previousResponder: NSResponder?) {
         DispatchQueue.main.async { [weak self] in
             guard let self, let window = self.view.window else { return }
             if let previousResponder {
-                _ = window.makeFirstResponder(previousResponder)
+                if window.makeFirstResponder(previousResponder) {
+                    return
+                }
             }
+            _ = window.makeFirstResponder(nil)
         }
     }
 
