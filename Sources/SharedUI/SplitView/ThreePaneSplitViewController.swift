@@ -197,7 +197,13 @@ open class ThreePaneSplitViewController: NSSplitViewController {
         if let m = contentKeyboardMonitor { NSEvent.removeMonitor(m); contentKeyboardMonitor = nil }
     }
 
-    // MARK: - Inspector toggle
+    // MARK: - Pane toggles
+
+    /// Toggles the sidebar with animation.
+    @objc override public func toggleSidebar(_ sender: Any?) {
+        sidebarItem.animator().isCollapsed.toggle()
+        schedulePaneStateSync()
+    }
 
     /// Toggles the inspector with animation, preserving first-responder focus.
     @objc override public func toggleInspector(_ sender: Any?) {
