@@ -199,85 +199,17 @@ open class ThreePaneSplitViewController: NSSplitViewController {
 
     // MARK: - Inspector toggle
 
-    /// Toggles the sidebar with animation, preserving first-responder focus.
-    @objc override public func toggleSidebar(_ sender: Any?) {
-        let previousResponder = view.window?.firstResponder
-        super.toggleSidebar(sender)
-        schedulePaneStateSync()
-        restoreFocusAfterPaneToggle(previousResponder, suppressToolbarSearchFocus: true)
-    }
-
     /// Toggles the inspector with animation, preserving first-responder focus.
     @objc override public func toggleInspector(_ sender: Any?) {
         let previousResponder = view.window?.firstResponder
         inspectorItem.animator().isCollapsed.toggle()
         schedulePaneStateSync()
-        restoreFocusAfterPaneToggle(previousResponder, suppressToolbarSearchFocus: false)
-    }
-
-    private func restoreFocusAfterPaneToggle(
-        _ previousResponder: NSResponder?,
-        suppressToolbarSearchFocus: Bool
-    ) {
-        restoreFocusAfterPaneToggle(
-            previousResponder,
-            suppressToolbarSearchFocus: suppressToolbarSearchFocus,
-            after: 0
-        )
-        restoreFocusAfterPaneToggle(
-            previousResponder,
-            suppressToolbarSearchFocus: suppressToolbarSearchFocus,
-            after: 0.05
-        )
-        restoreFocusAfterPaneToggle(
-            previousResponder,
-            suppressToolbarSearchFocus: suppressToolbarSearchFocus,
-            after: 0.25
-        )
-    }
-
-    private func restoreFocusAfterPaneToggle(
-        _ previousResponder: NSResponder?,
-        suppressToolbarSearchFocus: Bool,
-        after delay: TimeInterval
-    ) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak previousResponder] in
+        DispatchQueue.main.async { [weak self] in
             guard let self, let window = self.view.window else { return }
-            if let previousResponder, self.canRestoreFocus(to: previousResponder) {
-                if window.makeFirstResponder(previousResponder) {
-                    return
-                }
-            }
-
-            if suppressToolbarSearchFocus, self.isToolbarSearchResponder(window.firstResponder) {
-                _ = window.makeFirstResponder(nil)
-                return
-            }
-
-            if previousResponder == nil {
-                _ = window.makeFirstResponder(nil)
+            if let previousResponder {
+                _ = window.makeFirstResponder(previousResponder)
             }
         }
-    }
-
-    private func canRestoreFocus(to responder: NSResponder) -> Bool {
-        if sidebarItem.isCollapsed,
-           KeyboardShortcutSupport.isResponder(responder, inside: sidebarItem.viewController.view) {
-            return false
-        }
-        if inspectorItem.isCollapsed,
-           KeyboardShortcutSupport.isResponder(responder, inside: inspectorItem.viewController.view) {
-            return false
-        }
-        return true
-    }
-
-    private func isToolbarSearchResponder(_ responder: NSResponder?) -> Bool {
-        if responder is NSSearchField {
-            return true
-        }
-        guard let textView = responder as? NSTextView else { return false }
-        return textView.delegate is NSSearchField
     }
 
     // MARK: - Private
