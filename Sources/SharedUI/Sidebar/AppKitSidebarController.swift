@@ -106,9 +106,12 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         guard onRenameItem != nil else { return }
         for row in 0..<outlineView.numberOfRows {
             guard let box = outlineView.item(atRow: row) as? ItemBox,
-                  predicate(box.item),
-                  let cell = outlineView.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView
-            else { continue }
+                  predicate(box.item) else { continue }
+            isSuppressingSelectionCallbacks = true
+            outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            isSuppressingSelectionCallbacks = false
+            outlineView.scrollRowToVisible(row)
+            guard let cell = outlineView.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView else { return }
             let item = box.item
             cell.beginRenaming(
                 onCommit: { [weak self] newName in self?.onRenameItem?(item, newName) },
