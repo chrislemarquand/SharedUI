@@ -73,6 +73,8 @@ open class ThreePaneSplitViewController: NSSplitViewController {
     private var isPaneStateSyncScheduled = false
     private var didApplyInitialContentSplit = false
     private var didApplyInitialInspectorVisibility = false
+    private var lastObservedSidebarCollapsed: Bool?
+    private var lastObservedInspectorCollapsed: Bool?
 
     private let mainAutosaveName: String
     private let contentAutosaveName: String
@@ -226,10 +228,32 @@ open class ThreePaneSplitViewController: NSSplitViewController {
                 queue: .main
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.schedulePaneStateSync()
+                    self?.schedulePaneStateSyncIfCollapseChanged()
                 }
             }
             splitResizeObservers.append(obs)
+        }
+    }
+
+    /// Resize-observer hook: only schedule a pane state sync when collapsed state actually flips.
+    /// Live divider drags fire didResizeSubviews continuously without changing collapse state.
+    ///
+    /// When a flip is detected we *defer* the sync past the implicit collapse animation. A toolbar
+    /// `syncAndValidate` mid-animation mutates `NSToolbarItem.image`/`.label`, which forces toolbar
+    /// re-layout and causes `NSTrackingSeparatorToolbarItem` to flush the split-view animation
+    /// transaction (the sidebar visibly snaps to its target position instead of animating).
+    private func schedulePaneStateSyncIfCollapseChanged() {
+        let sidebar = sidebarItem.isCollapsed
+        let inspector = inspectorItem.isCollapsed
+        guard sidebar != lastObservedSidebarCollapsed || inspector != lastObservedInspectorCollapsed else { return }
+        lastObservedSidebarCollapsed = sidebar
+        lastObservedInspectorCollapsed = inspector
+
+        // Default NSSplitViewItem collapse animation is ~0.25s. A small buffer past that lets the
+        // animation finish before any toolbar mutations land.
+        let deadline: DispatchTime = .now() + 0.35
+        DispatchQueue.main.asyncAfter(deadline: deadline) { [weak self] in
+            self?.onPaneStateChanged?()
         }
     }
 
