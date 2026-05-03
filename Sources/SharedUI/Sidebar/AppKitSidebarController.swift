@@ -10,6 +10,11 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         case noInitialSelection
     }
 
+    public enum ScrollContentInsetMode: Equatable {
+        case automatic
+        case manual(top: CGFloat)
+    }
+
     // MARK: - Public interface
 
     public var sections: [Section]
@@ -23,6 +28,13 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     public var onItemPromotedToSection: ((Item, Section) -> Void)?
     /// Set to enable inline rename on double-click. When nil, double-click has no effect.
     public var onRenameItem: ((Item, String) -> Void)?
+    public var scrollContentInsetMode: ScrollContentInsetMode = .automatic {
+        didSet {
+            guard oldValue != scrollContentInsetMode else { return }
+            didApplyInitialScrollPosition = false
+            applyScrollContentInsetMode()
+        }
+    }
 
     public init(
         sections: [Section],
@@ -193,6 +205,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         scrollView.scrollerStyle = .overlay
 
         view = scrollView
+        applyScrollContentInsetMode()
     }
 
     override public func viewDidLayout() {
@@ -202,6 +215,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
 
     private func applyInitialScrollPositionIfNeeded() {
         guard !didApplyInitialScrollPosition else { return }
+        guard scrollContentInsetMode == .automatic else { return }
         // automaticallyAdjustsContentInsets applies a top inset (toolbar height) after
         // the initial layout pass but does not retroactively correct the clip view's
         // scroll origin. Without this, the content sits below its intended position
@@ -210,6 +224,19 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         guard scrollView.contentInsets.top > 0 else { return }
         didApplyInitialScrollPosition = true
         scrollView.documentView?.scroll(.zero)
+    }
+
+    private func applyScrollContentInsetMode() {
+        guard isViewLoaded else { return }
+        switch scrollContentInsetMode {
+        case .automatic:
+            scrollView.automaticallyAdjustsContentInsets = true
+        case .manual(let top):
+            scrollView.automaticallyAdjustsContentInsets = false
+            scrollView.contentInsets.top = top
+            scrollView.scrollerInsets.top = top
+            scrollView.documentView?.scroll(.zero)
+        }
     }
 
     override public func viewDidLoad() {
