@@ -32,7 +32,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         didSet {
             guard oldValue != scrollContentInsetMode else { return }
             didApplyInitialScrollPosition = false
-            applyScrollContentInsetMode()
+            applyScrollContentInsetMode(repairScrollOrigin: true)
         }
     }
 
@@ -110,6 +110,10 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
 
     public func focusSidebar() {
         view.window?.makeFirstResponder(outlineView)
+    }
+
+    public func reapplyScrollContentInsetMode() {
+        applyScrollContentInsetMode(repairScrollOrigin: true)
     }
 
     /// Programmatically begins inline rename on the first item matching the predicate.
@@ -205,7 +209,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         scrollView.scrollerStyle = .overlay
 
         view = scrollView
-        applyScrollContentInsetMode()
+        applyScrollContentInsetMode(repairScrollOrigin: true)
     }
 
     override public func viewDidLayout() {
@@ -226,7 +230,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         scrollView.documentView?.scroll(.zero)
     }
 
-    private func applyScrollContentInsetMode() {
+    private func applyScrollContentInsetMode(repairScrollOrigin: Bool = false) {
         guard isViewLoaded else { return }
         switch scrollContentInsetMode {
         case .automatic:
@@ -235,7 +239,9 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             scrollView.automaticallyAdjustsContentInsets = false
             scrollView.contentInsets.top = top
             scrollView.scrollerInsets.top = top
-            scrollView.documentView?.scroll(.zero)
+            if repairScrollOrigin {
+                scrollView.documentView?.scroll(.zero)
+            }
         }
     }
 
