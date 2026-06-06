@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public enum KeyCode {
@@ -17,3 +18,4 @@ public enum KeyCode {
     public static let downArrow: UInt16 = 125
     public static let upArrow: UInt16 = 126
 }
+#endif

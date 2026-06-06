@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -166,3 +167,4 @@ public struct WorkflowCityComboField: NSViewRepresentable {
         }
     }
 }
+#endif

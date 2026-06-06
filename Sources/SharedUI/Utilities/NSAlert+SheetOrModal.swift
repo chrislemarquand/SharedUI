@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public extension NSAlert {
@@ -25,3 +26,4 @@ public extension NSAlert {
         return runModal()
     }
 }
+#endif

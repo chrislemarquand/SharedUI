@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// Returns a fully configured standard macOS app menu.
@@ -104,3 +105,4 @@ public func makeStandardWindowMenu() -> NSMenu {
 
     return menu
 }
+#endif

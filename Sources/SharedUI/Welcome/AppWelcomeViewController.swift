@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 import WhatsNewKit
@@ -114,3 +115,4 @@ public final class AppWelcomeViewController: NSHostingController<AnyView> {
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 }
+#endif

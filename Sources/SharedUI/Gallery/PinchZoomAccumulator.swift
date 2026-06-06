@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public enum PinchZoomStep: Sendable {
@@ -42,3 +43,4 @@ public final class PinchZoomAccumulator {
         }
     }
 }
+#endif

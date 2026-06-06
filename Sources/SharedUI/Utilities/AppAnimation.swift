@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import QuartzCore
 import SwiftUI
@@ -18,3 +19,4 @@ public func appAnimation() -> Animation? {
     }
     return .easeInOut(duration: Motion.duration)
 }
+#endif

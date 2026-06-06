@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public struct InspectorFieldSettingsField: Hashable {
@@ -240,3 +241,4 @@ public final class InspectorFieldSettingsViewController: NSViewController {
         }
     }
 }
+#endif

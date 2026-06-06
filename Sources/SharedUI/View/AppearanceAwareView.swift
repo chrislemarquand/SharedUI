@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 @MainActor
@@ -9,3 +10,4 @@ public final class AppearanceAwareView: NSView {
         onEffectiveAppearanceChange?()
     }
 }
+#endif

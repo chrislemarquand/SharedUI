@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 @MainActor
@@ -30,3 +31,4 @@ public enum ContextMenuSupport {
         return item
     }
 }
+#endif

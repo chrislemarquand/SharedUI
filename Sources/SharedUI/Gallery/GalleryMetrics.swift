@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public struct GalleryMetrics: Sendable {
@@ -29,3 +30,4 @@ public struct GalleryMetrics: Sendable {
 
     public static let `default` = GalleryMetrics()
 }
+#endif

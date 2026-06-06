@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 // The only custom behaviour needed beyond a plain NSTableCellView: when AppKit
@@ -81,3 +82,4 @@ public final class SidebarCellView: NSTableCellView, NSTextFieldDelegate {
         }
     }
 }
+#endif

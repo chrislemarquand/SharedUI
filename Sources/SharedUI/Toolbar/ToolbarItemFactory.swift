@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 @MainActor
@@ -89,3 +90,4 @@ public enum ToolbarItemFactory {
         return item
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// Base class for the standard three-pane (sidebar | content | inspector) window layout.
@@ -294,3 +295,4 @@ open class ThreePaneSplitViewController: NSSplitViewController {
             || d.object(forKey: "NSSplitView Divider Positions \(contentAutosaveName)") != nil
     }
 }
+#endif

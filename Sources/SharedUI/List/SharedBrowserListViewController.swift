@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Foundation
 
@@ -379,3 +380,4 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         return true
     }
 }
+#endif

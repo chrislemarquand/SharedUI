@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -54,3 +55,4 @@ public final class NoticeBar: NSView {
         }
     }
 }
+#endif

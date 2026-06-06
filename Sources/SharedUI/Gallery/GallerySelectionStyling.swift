@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public enum GallerySelectionStyling {
@@ -35,3 +36,4 @@ public enum GallerySelectionStyling {
         NSApp.isActive && (view?.window?.isKeyWindow == true)
     }
 }
+#endif

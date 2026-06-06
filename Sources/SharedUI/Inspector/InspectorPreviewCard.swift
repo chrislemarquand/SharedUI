@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -44,3 +45,4 @@ public extension InspectorPreviewCard where Overlay == EmptyView {
         self.init(image: image, isLoading: isLoading) { EmptyView() }
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 @MainActor
@@ -75,3 +76,4 @@ public final class ToolbarShellController: NSObject, NSToolbarDelegate, NSToolba
         content?.validateToolbarItem(item) ?? true
     }
 }
+#endif

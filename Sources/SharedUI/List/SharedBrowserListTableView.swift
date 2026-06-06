@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Foundation
 
@@ -71,3 +72,4 @@ final class SharedBrowserListHeaderView: NSTableHeaderView {
         return lockedColumnIDs.contains(columnID)
     }
 }
+#endif

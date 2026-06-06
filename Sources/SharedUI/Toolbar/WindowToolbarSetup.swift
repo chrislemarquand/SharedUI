@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// Applies the native Liquid Glass toolbar presentation without forcing
@@ -7,3 +8,4 @@ public func configureWindowForToolbar(_ window: NSWindow) {
     window.styleMask.insert(.fullSizeContentView)
     window.toolbarStyle = .automatic
 }
+#endif

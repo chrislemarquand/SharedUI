@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// Base view controller for settings panes that use the standard label | control(s) grid layout.
@@ -118,3 +119,4 @@ open class SettingsGridViewController: NSViewController {
         return control
     }
 }
+#endif

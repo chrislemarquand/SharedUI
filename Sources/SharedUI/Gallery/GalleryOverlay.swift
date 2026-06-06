@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public enum GalleryOverlayPosition: Sendable {
@@ -44,3 +45,4 @@ public func makeGalleryOverlaySymbol(
     NSLayoutConstraint.activate(constraints)
     return overlay
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import MapKit
 import SwiftUI
@@ -160,3 +161,4 @@ private final class InspectorMapSnapshotPipeline: @unchecked Sendable {
         return snapshot.image
     }
 }
+#endif

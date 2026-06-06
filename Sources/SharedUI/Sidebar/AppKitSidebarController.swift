@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 // MARK: - Generic controller
@@ -648,3 +649,4 @@ final class SidebarOutlineView: NSOutlineView {
         return menuForClickedRow?(row) ?? super.menu(for: event)
     }
 }
+#endif

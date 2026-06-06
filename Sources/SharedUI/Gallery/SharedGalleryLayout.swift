@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 @MainActor
@@ -87,3 +88,4 @@ public final class SharedGalleryLayout {
         collectionViewLayout.invalidateLayout()
     }
 }
+#endif

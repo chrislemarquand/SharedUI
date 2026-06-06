@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// A path bar that displays a file-system URL as clickable breadcrumb cells.
@@ -67,3 +68,4 @@ public final class PathBarViewController: NSViewController {
     }
 
 }
+#endif

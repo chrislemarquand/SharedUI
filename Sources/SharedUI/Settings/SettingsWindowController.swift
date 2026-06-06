@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public struct SettingsTabDescriptor {
@@ -127,3 +128,4 @@ private final class SettingsTabViewController: NSTabViewController {
         window.setFrame(constrainedFrame, display: true, animate: animated)
     }
 }
+#endif

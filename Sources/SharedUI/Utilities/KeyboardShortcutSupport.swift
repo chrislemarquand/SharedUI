@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 @MainActor
@@ -66,3 +67,4 @@ public enum KeyboardShortcutSupport {
         }
     }
 }
+#endif

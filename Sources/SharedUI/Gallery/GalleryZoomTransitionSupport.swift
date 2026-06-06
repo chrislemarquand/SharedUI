@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public struct GalleryZoomTransitionAnchor {
@@ -63,3 +64,4 @@ public enum GalleryZoomTransitionSupport {
         }
     }
 }
+#endif

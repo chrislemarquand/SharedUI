@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -107,3 +108,4 @@ public struct InspectorDatePickerField: NSViewRepresentable {
         }
     }
 }
+#endif

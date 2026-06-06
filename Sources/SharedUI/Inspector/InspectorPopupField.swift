@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -121,3 +122,4 @@ public struct InspectorPopupField: NSViewRepresentable {
         }
     }
 }
+#endif

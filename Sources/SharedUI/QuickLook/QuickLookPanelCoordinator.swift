@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Quartz
 
@@ -232,3 +233,4 @@ public final class QuickLookPanelCoordinator<SourceID: Hashable>: NSObject, @pre
         lockedHeight = targetHeight
     }
 }
+#endif

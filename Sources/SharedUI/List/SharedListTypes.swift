@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public enum SharedListColumnGroup: Sendable, Hashable {
@@ -80,3 +81,4 @@ public struct SharedListLayoutConfig: Sendable, Hashable {
         self.lockedColumnIDs = lockedColumnIDs
     }
 }
+#endif

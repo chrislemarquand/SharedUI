@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 /// Observes a window's effective appearance and fires a rebuild closure when
@@ -47,3 +48,4 @@ public final class ToolbarAppearanceAdapter {
         lastAppearanceName = nil
     }
 }
+#endif

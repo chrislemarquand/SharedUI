@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import ImageIO
 import QuickLookThumbnailing
@@ -71,3 +72,4 @@ public enum ThumbnailGenerator {
         return sourceMod > cacheMod
     }
 }
+#endif
