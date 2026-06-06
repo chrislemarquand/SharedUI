@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 /// Shared list column persistence used by host apps.
@@ -43,4 +44,5 @@ public struct SharedListColumnStore {
         set { defaults.set(newValue, forKey: initialFitKey) }
     }
 }
+#endif
 
