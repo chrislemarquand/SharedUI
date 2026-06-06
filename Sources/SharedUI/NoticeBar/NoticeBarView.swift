@@ -1,10 +1,13 @@
 import SwiftUI
 
-/// A single-line notice bar with an optional primary and secondary button.
-/// Intended to be hosted in an AppKit `NSHostingView` via `NoticeBar`.
 public struct NoticeBarView: View {
     @Bindable var state: NoticeBarState
+    #if os(macOS)
     @Environment(\.controlActiveState) private var controlActiveState
+    private var isActive: Bool { controlActiveState != .inactive }
+    #else
+    private var isActive: Bool { true }
+    #endif
 
     public init(state: NoticeBarState) {
         self.state = state
@@ -14,7 +17,7 @@ public struct NoticeBarView: View {
         HStack(spacing: 8) {
             Text(state.message)
                 .font(.system(size: 12))
-                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                .foregroundStyle(secondaryLabel)
                 .lineLimit(1)
                 .padding(.leading, 8)
 
@@ -25,24 +28,24 @@ public struct NoticeBarView: View {
                     secondary.handler()
                 }
                 .buttonStyle(.bordered)
-                .tint(controlActiveState == .inactive ? Color(nsColor: .tertiaryLabelColor) : Color(nsColor: .secondaryLabelColor))
+                .tint(isActive ? secondaryLabel : tertiaryLabel)
                 .controlSize(.small)
             }
 
             if let primary = state.primaryAction {
-                if controlActiveState == .inactive {
-                    Button(primary.title) {
-                        primary.handler()
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(Color(nsColor: .tertiaryLabelColor))
-                    .controlSize(.small)
-                } else {
+                if isActive {
                     Button(primary.title) {
                         primary.handler()
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.accentColor)
+                    .controlSize(.small)
+                } else {
+                    Button(primary.title) {
+                        primary.handler()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(tertiaryLabel)
                     .controlSize(.small)
                 }
             }
@@ -53,5 +56,21 @@ public struct NoticeBarView: View {
         .overlay(alignment: .bottom) {
             Divider()
         }
+    }
+
+    private var secondaryLabel: Color {
+        #if os(macOS)
+        Color(nsColor: .secondaryLabelColor)
+        #else
+        Color(uiColor: .secondaryLabel)
+        #endif
+    }
+
+    private var tertiaryLabel: Color {
+        #if os(macOS)
+        Color(nsColor: .tertiaryLabelColor)
+        #else
+        Color(uiColor: .tertiaryLabel)
+        #endif
     }
 }

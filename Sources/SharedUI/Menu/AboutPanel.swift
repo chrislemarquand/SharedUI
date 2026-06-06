@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 public struct AboutPanelCredit: Sendable {
@@ -62,3 +63,4 @@ public func showAboutPanel(
     NSApp.orderFrontStandardAboutPanel(options: options)
     NSApp.activate(ignoringOtherApps: true)
 }
+#endif
