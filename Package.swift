@@ -6,6 +6,7 @@ let package = Package(
     platforms: [
         .macOS(.v26),
         .iOS(.v26),
+        .tvOS(.v26),
     ],
     products: [
         .library(name: "SharedUI", targets: ["SharedUI"])
@@ -17,7 +18,7 @@ let package = Package(
         .target(
             name: "SharedUI",
             dependencies: [
-                .product(name: "WhatsNewKit", package: "WhatsNewKit"),
+                .product(name: "WhatsNewKit", package: "WhatsNewKit", condition: .when(platforms: [.macOS])),
             ],
             path: "Sources/SharedUI"
         )
