@@ -12,7 +12,7 @@ private final class TitledPreviewItem: NSObject, QLPreviewItem {
 }
 
 @MainActor
-public final class QuickLookPanelCoordinator<SourceID: Hashable>: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
+public final class QuickLookPanelCoordinator<SourceID: Hashable & Sendable>: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
     private var sourceItems: [SourceID] = []
     private var displayItems: [any QLPreviewItem] = []
     private var displayToSource: [URL: SourceID] = [:]
