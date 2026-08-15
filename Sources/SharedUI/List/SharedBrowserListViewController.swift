@@ -168,9 +168,13 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         tableView.autosaveTableColumns = true
         for definition in columns {
             if let column = tableView.tableColumns.first(where: { $0.identifier.rawValue == definition.id }) {
-                column.isHidden = !columnStore.isVisible(definition)
+                // Non-toggleable columns have no "Show/Hide" menu entry, so there's no legitimate
+                // way for a persisted visibility set (written before this column existed) to have
+                // ever recorded them — always show them rather than reading stale persisted state.
+                column.isHidden = definition.isToggleable ? !columnStore.isVisible(definition) : false
             }
         }
+        enforceLockedColumnPositions()
         tableView.headerView?.menu = buildColumnHeaderMenu()
 
         scrollView.documentView = tableView
@@ -181,6 +185,26 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
             scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+    }
+
+    /// `autosaveTableColumns` restores column order from a persisted layout that predates a
+    /// locked column's existence, which can leave it wherever AppKit happened to slot it in
+    /// (commonly the end) rather than adjacent to the primary column as intended. Locked columns
+    /// have no drag-to-reorder affordance for the user to fix this themselves, so pin them back
+    /// to immediately follow the primary column, in the order they're declared, every time.
+    private func enforceLockedColumnPositions() {
+        guard !layoutConfig.lockedColumnIDs.isEmpty,
+              let primaryIndex = tableView.tableColumns.firstIndex(where: { $0.identifier.rawValue == layoutConfig.primaryColumnID })
+        else { return }
+
+        var insertionIndex = primaryIndex + 1
+        for definition in columns where layoutConfig.lockedColumnIDs.contains(definition.id) {
+            guard let currentIndex = tableView.tableColumns.firstIndex(where: { $0.identifier.rawValue == definition.id }) else { continue }
+            if currentIndex != insertionIndex {
+                tableView.moveColumn(currentIndex, toColumn: insertionIndex)
+            }
+            insertionIndex += 1
+        }
     }
 
     private func buildColumnHeaderMenu() -> NSMenu {
