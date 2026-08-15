@@ -24,6 +24,9 @@ public final class SidebarCellView: NSTableCellView, NSTextFieldDelegate {
         renameOriginalValue = textField.stringValue
         textField.isEditable = true
         textField.isSelectable = true
+        // Scrollable only while editing so long names can scroll under the caret;
+        // at rest the field must stay non-scrollable to truncate with an ellipsis.
+        textField.cell?.isScrollable = true
         textField.delegate = self
         textField.selectText(nil)
     }
@@ -34,6 +37,9 @@ public final class SidebarCellView: NSTableCellView, NSTextFieldDelegate {
         let value = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         textField.isEditable = false
         textField.isSelectable = false
+        textField.cell?.isScrollable = false
+        // Toggling isScrollable resets the cell's wrapping behaviour; restore truncation.
+        textField.lineBreakMode = .byTruncatingTail
         textField.delegate = nil
         if cancelled || value.isEmpty {
             textField.stringValue = renameOriginalValue

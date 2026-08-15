@@ -495,8 +495,10 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             titleField.isSelectable = false
             titleField.isBordered = false
             titleField.drawsBackground = false
+            // Not scrollable at rest: a scrollable cell ignores byTruncatingTail and
+            // hard-clips against the count badge. SidebarCellView enables scrolling
+            // only for the duration of an inline rename.
             titleField.lineBreakMode = .byTruncatingTail
-            titleField.cell?.isScrollable = true
             titleField.translatesAutoresizingMaskIntoConstraints = false
 
             let countField = NSTextField(labelWithString: "")
@@ -519,7 +521,7 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             // • titleTrailingToCount — active when a count is shown; title stops before the count
             // • titleTrailingToCell  — active when no count; title can reach the cell edge
             let titleToCount = titleField.trailingAnchor.constraint(
-                lessThanOrEqualTo: countField.leadingAnchor, constant: -4)
+                lessThanOrEqualTo: countField.leadingAnchor, constant: -8)
             let titleToCell = titleField.trailingAnchor.constraint(
                 lessThanOrEqualTo: cell.trailingAnchor, constant: -8)
             cell.titleTrailingToCount = titleToCount
