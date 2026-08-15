@@ -34,6 +34,23 @@ Work needed:
 
 Ledger's roadmap calls for a full native QuickLook rewrite in v1.3/v1.5. If that rewrite uses `QuickLookPanelCoordinator` as the foundation (currently Ledger uses a separate preview path), `QuickLookPanelCoordinator` may need extension to support Ledger's additional requirements (e.g., list-view navigation semantics, broader content type support). Track here if coordinator changes are needed.
 
+### macOS 26 chrome-workaround audit on Golden Gate (macOS 27)
+*(Sourced from: Ledger v1.2.3 Golden Gate work, 2026-08-15; benefits Ledger and Librarian)*
+
+Every custom chrome hack from the macOS 26 Liquid Glass cycle was an attempt to get system behaviour without good APIs. Golden Gate's AppKit surface is nearly unchanged (SDK is versioned 26.5; the only post-26.0 addition is `NSScrollEdgeEffectStyle` `.soft`/`.hard` via `preferredScrollEdgeEffectStyle` on titlebar/split-view accessory controllers, macOS 26.1), so the expected wins are **behavioural** fixes in the OS, not adoption work. Method: disable each workaround on macOS 27, observe, then delete / replace with `NSScrollEdgeEffectStyle` / keep with a note naming the beta it was last verified against.
+
+Inventory (audited 2026-08-15):
+1. `AppKitSidebarController.ScrollContentInsetMode.manual(top:)` + `reapplyScrollContentInsetMode()` — **dormant**: no callers in Ledger, Librarian, or Ripcord. Delete unless a consumer materialises.
+2. `AppKitSidebarController.applyInitialScrollPositionIfNeeded()` scroll-origin repair — active every launch; compensates for `automaticallyAdjustsContentInsets` applying the toolbar inset after initial layout without correcting the clip-view origin (content snaps up on first click). Re-test with repair disabled.
+3. Ledger `MainContentView.viewWillAppear` window-config timing — avoids macOS 26 flash of sharp-cornered floating-sidebar shadow when configuring in `viewDidAppear`. Test normal lifecycle on 27.
+4. Librarian `MainSplitViewController.viewWillAppear` — same timing workaround, copied from Ledger. Test with 3.
+5. Possible: "Defer pane state sync past collapse animation" (`61c888a`) — determine during audit whether glass-animation timing or ordinary AppKit sequencing.
+6. `ToolbarAppearanceAdapter` — macOS 26 dark-mode workaround (NSToolbar item views rendered once and stayed light after switching to dark; toolbar was rebuilt on `effectiveAppearance` change). Currently dormant: Ledger's wiring was removed in the `ToolbarShellController` refactor (Ledger `cc0db7e`, 2026-03-22), the shell has no appearance handling, and the class has zero callers — yet dark mode looks fine as of 2026-08-15, suggesting the OS behaviour improved. Test deliberately on macOS 27 (toggle light↔dark with Ledger/Librarian open, check toolbar buttons). If confirmed fine: delete the adapter class. If it recurs: wire appearance observation into `ToolbarShellController` rather than resurrecting per-app wiring.
+
+7. `AppKitSidebarController` sidebar-cell rebuild — replace the hand-constrained icon/title/count layout (mutually-exclusive `titleTrailingToCount`/`titleTrailingToCell` pair toggled on reuse, magic gap constants) with an `NSStackView` using standard spacing and a standard truncating label; keep scrollable-only-during-rename (shipped as the v1.2.3 quick fix after macOS 27 row metrics exposed the title/count clash). While in there, re-test `SidebarCellView.backgroundStyle` emphasized-colour override — same territory as "Sidebar inactive-window label colour" below; parts may now be native behaviour.
+
+Not workarounds (checked, keep): `SharedGalleryLayout` section insets; Librarian notice-bar safe-area constraint; Ledger's `#available(macOS 26.0)` toolbar `.prominent` style (deliberate API adoption).
+
 ### Sidebar inactive-window label colour
 *(Sourced from: observed in both Ledger and Librarian)*
 
