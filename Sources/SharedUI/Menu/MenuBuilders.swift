@@ -25,6 +25,11 @@ public func makeStandardAppMenu(
     let settingsItem = NSMenuItem(title: "Settings…", action: settingsAction, keyEquivalent: ",")
     settingsItem.keyEquivalentModifierMask = .command
     settingsItem.image = NSImage(systemSymbolName: "gear", accessibilityDescription: nil)
+    // macOS 27 hides menu-item SF Symbol images by default; opt back in explicitly so this
+    // renders there the same as it already does on 26. `.image` alone isn't enough on 27.
+    if #available(macOS 27.0, *) {
+        settingsItem.preferredImageVisibility = .visible
+    }
     menu.addItem(settingsItem)
 
     if let checkForUpdatesAction {
