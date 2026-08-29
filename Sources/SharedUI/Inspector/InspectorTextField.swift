@@ -32,6 +32,7 @@ public struct InspectorTextField: NSViewRepresentable {
     var onCommit: (() -> Void)?
     var onTab: (() -> Void)?
     var onShiftTab: (() -> Void)?
+    var onCopy: (() -> Void)?
 
     public init(
         text: Binding<String>,
@@ -45,7 +46,8 @@ public struct InspectorTextField: NSViewRepresentable {
         onEscape: @escaping () -> Void,
         onCommit: (() -> Void)? = nil,
         onTab: (() -> Void)? = nil,
-        onShiftTab: (() -> Void)? = nil
+        onShiftTab: (() -> Void)? = nil,
+        onCopy: (() -> Void)? = nil
     ) {
         _text = text
         self.placeholder = placeholder
@@ -59,6 +61,7 @@ public struct InspectorTextField: NSViewRepresentable {
         self.onCommit = onCommit
         self.onTab = onTab
         self.onShiftTab = onShiftTab
+        self.onCopy = onCopy
     }
 
     public func makeCoordinator() -> Coordinator {
@@ -90,7 +93,8 @@ public struct InspectorTextField: NSViewRepresentable {
             field: field,
             coordinator: context.coordinator,
             fieldLabel: fieldLabel,
-            isMixedValue: isMixedValue
+            isMixedValue: isMixedValue,
+            hasCopyAction: onCopy != nil
         )
         context.coordinator.container = container
         context.coordinator.registerFocusObserver()
@@ -113,6 +117,7 @@ public struct InspectorTextField: NSViewRepresentable {
             field.isEnabled = isEnabled
         }
         nsView.isMixedValue = isMixedValue
+        nsView.hasCopyAction = onCopy != nil
         nsView.updateClearButtonVisibility()
     }
 
@@ -236,6 +241,24 @@ public struct InspectorTextField: NSViewRepresentable {
             container?.textField.stringValue = ""
             container?.updateClearButtonVisibility()
         }
+
+        @objc fileprivate func copyButtonPressed() {
+            parent.onCopy?()
+        }
+    }
+
+    // MARK: - TintOnPressButton
+
+    /// Borderless icon button whose glyph darkens from secondary to primary label color while
+    /// the mouse is down, matching the system convention for glyph-only controls like this
+    /// (e.g. field clear buttons) — a shade change instead of a bezel/highlight, since these
+    /// buttons have no border to begin with.
+    private final class TintOnPressButton: NSButton {
+        override func mouseDown(with event: NSEvent) {
+            contentTintColor = .labelColor
+            super.mouseDown(with: event)
+            contentTintColor = .secondaryLabelColor
+        }
     }
 
     // MARK: - FocusAwareTextField
@@ -255,20 +278,23 @@ public struct InspectorTextField: NSViewRepresentable {
     public final class ContainerView: NSView {
         let textField: NSTextField
         private let clearButton: NSButton
+        private let copyButton: NSButton
         private var trackingArea: NSTrackingArea?
         fileprivate var isEditing = false
         private var isHovered = false
         fileprivate var isMixedValue: Bool
+        fileprivate var hasCopyAction: Bool
 
-        init(field: NSTextField, coordinator: Coordinator, fieldLabel: String, isMixedValue: Bool) {
+        init(field: NSTextField, coordinator: Coordinator, fieldLabel: String, isMixedValue: Bool, hasCopyAction: Bool) {
             self.isMixedValue = isMixedValue
+            self.hasCopyAction = hasCopyAction
             textField = field
 
-            let clear = NSButton(frame: .zero)
+            let clear = TintOnPressButton(frame: .zero)
             clear.isBordered = false
             clear.bezelStyle = .regularSquare
             clear.image = NSImage(
-                systemSymbolName: "xmark.circle.fill",
+                systemSymbolName: "xmark.circle",
                 accessibilityDescription: nil
             )
             clear.imageScaling = .scaleProportionallyDown
@@ -281,10 +307,28 @@ public struct InspectorTextField: NSViewRepresentable {
             clear.setAccessibilityRole(.button)
             clearButton = clear
 
+            let copy = TintOnPressButton(frame: .zero)
+            copy.isBordered = false
+            copy.bezelStyle = .regularSquare
+            copy.image = NSImage(
+                systemSymbolName: "doc.on.doc",
+                accessibilityDescription: nil
+            )
+            copy.imageScaling = .scaleProportionallyDown
+            copy.contentTintColor = .secondaryLabelColor
+            copy.isHidden = true
+            copy.translatesAutoresizingMaskIntoConstraints = false
+            copy.target = coordinator
+            copy.action = #selector(Coordinator.copyButtonPressed)
+            copy.setAccessibilityLabel("Copy \(fieldLabel)")
+            copy.setAccessibilityRole(.button)
+            copyButton = copy
+
             super.init(frame: .zero)
             translatesAutoresizingMaskIntoConstraints = false
             addSubview(field)
             addSubview(clear)
+            addSubview(copy)
 
             NSLayoutConstraint.activate([
                 field.topAnchor.constraint(equalTo: topAnchor),
@@ -296,6 +340,11 @@ public struct InspectorTextField: NSViewRepresentable {
                 clear.centerYAnchor.constraint(equalTo: field.centerYAnchor),
                 clear.widthAnchor.constraint(equalToConstant: 16),
                 clear.heightAnchor.constraint(equalToConstant: 16),
+                // Copy button sits immediately to the left of the clear button
+                copy.trailingAnchor.constraint(equalTo: clear.leadingAnchor, constant: -4),
+                copy.centerYAnchor.constraint(equalTo: field.centerYAnchor),
+                copy.widthAnchor.constraint(equalToConstant: 16),
+                copy.heightAnchor.constraint(equalToConstant: 16),
             ])
         }
 
@@ -341,6 +390,10 @@ public struct InspectorTextField: NSViewRepresentable {
             let hasContent = !textField.stringValue.isEmpty || isMixedValue
             let show = hasContent && (isHovered || isEditing) && textField.isEnabled
             clearButton.isHidden = !show
+
+            // Copying a "Multiple values" placeholder isn't meaningful, unlike clearing one.
+            let hasSingleValue = !textField.stringValue.isEmpty && !isMixedValue
+            copyButton.isHidden = !(hasCopyAction && hasSingleValue && (isHovered || isEditing) && textField.isEnabled)
         }
     }
 }
