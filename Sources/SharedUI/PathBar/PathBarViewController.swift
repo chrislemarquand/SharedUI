@@ -52,6 +52,12 @@ public final class PathBarViewController: NSViewController {
         pathControl.controlSize = .small
         pathControl.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         pathControl.translatesAutoresizingMaskIntoConstraints = false
+        // NSPathControl's default (.required) horizontal compression resistance means
+        // an unusually long path (many nested components) fights the width constraint
+        // below instead of truncating, which can inflate the window's effective width.
+        // Let it compress freely — NSPathControl truncates/overflows into a popup
+        // button on its own once it's allowed to shrink.
+        pathControl.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.addSubview(pathControl)
 
         NSLayoutConstraint.activate([
