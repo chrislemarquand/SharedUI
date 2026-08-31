@@ -1,6 +1,24 @@
 #if os(macOS)
 import AppKit
 
+public extension NSMenuItem {
+    /// Sets `preferredImageVisibility = .visible` (macOS 27+, keeps this item's SF Symbol
+    /// image showing instead of AppKit's new default of hiding menu-item images).
+    ///
+    /// Done via KVC rather than the real property so this compiles against SDKs older than
+    /// macOS 27 too — `#available` alone doesn't help here, since it's a runtime check and the
+    /// symbol still has to exist in the SDK the compiler is using. `1` is
+    /// `NSMenuItemImageVisibilityVisible` (see AppKit's `NSMenuItem.h`), hardcoded rather than
+    /// referencing the `NSMenuItem.ImageVisibility` enum itself, since that type's declaration
+    /// is equally unavailable pre-27. The `#available` guard below isn't just for
+    /// correctness — KVC on a key an object doesn't have throws, so this must never run on
+    /// macOS <27, where the real property doesn't exist.
+    func makeImagePreferredVisible() {
+        guard #available(macOS 27.0, *) else { return }
+        setValue(1, forKey: "preferredImageVisibility")
+    }
+}
+
 /// Returns a fully configured standard macOS app menu.
 /// Assign as the submenu of the first NSMenuItem in NSApp.mainMenu.
 ///
@@ -27,9 +45,7 @@ public func makeStandardAppMenu(
     settingsItem.image = NSImage(systemSymbolName: "gear", accessibilityDescription: nil)
     // macOS 27 hides menu-item SF Symbol images by default; opt back in explicitly so this
     // renders there the same as it already does on 26. `.image` alone isn't enough on 27.
-    if #available(macOS 27.0, *) {
-        settingsItem.preferredImageVisibility = .visible
-    }
+    settingsItem.makeImagePreferredVisible()
     menu.addItem(settingsItem)
 
     if let checkForUpdatesAction {
