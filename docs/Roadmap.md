@@ -51,10 +51,10 @@ Inventory (audited 2026-08-15):
 
 Not workarounds (checked, keep): `SharedGalleryLayout` section insets; Librarian notice-bar safe-area constraint; Ledger's `#available(macOS 26.0)` toolbar `.prominent` style (deliberate API adoption).
 
-### Sidebar inactive-window label colour
+### Sidebar inactive-window label colour — [Done/moot, v1.4 Phase 4.3, 2026-09-02]
 *(Sourced from: observed in both Ledger and Librarian)*
 
-When a window loses focus, sidebar SF Symbol icons correctly grey out but item label text stays black instead of dimming to match. Native macOS sidebars dim both. Investigation suggests `SidebarCellView.backgroundStyle` correctly calls `super` and does not manually set `textField.textColor`, so the root cause is not obvious from the code — it may be that AppKit's automatic propagation of `backgroundStyle` to the text field is not firing for unselected rows on key-window transitions in the current macOS version. Needs further investigation and testing.
+Was: when a window lost focus, sidebar SF Symbol icons correctly greyed out but item label text stayed black instead of dimming to match. Confirmed live on real macOS 27 the label now dims correctly with zero code changes — an OS-level fix, not something in this codebase. Went further and tested whether `SidebarCellView.backgroundStyle`'s icon/count-colour-forcing override was also now redundant: disabled it entirely, confirmed live in both apps that icons and count badges still dim/brighten correctly on selection, emphasis, and inactive-window transitions with no custom code at all. Deleted the override outright rather than leave a now-pointless method in place — plain `NSTableCellView`/`NSImageView`/`NSTextField` `backgroundStyle` propagation handles all three (icon, title, count) natively on this OS version.
 
 ### Gallery metadata subtitle customisation
 *(Sourced from: Ledger roadmap — v1.3)*
