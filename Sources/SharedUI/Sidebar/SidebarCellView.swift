@@ -1,10 +1,12 @@
 #if os(macOS)
 import AppKit
 
-// The only custom behaviour needed beyond a plain NSTableCellView: when AppKit
-// changes backgroundStyle (selected/deselected, emphasis, key-window transitions),
-// set the icon colour to match. AppKit handles text field colours via super.
-// Everything else — pill drawing, emphasis, focus — is native NSOutlineView behaviour.
+// v1.4 Phase 4.3: this used to override backgroundStyle to force the icon's tint and the count
+// field's colour on selection/emphasis/key-window changes, on the assumption AppKit's own
+// propagation wasn't reliably reaching them. Confirmed live on macOS 27 (both apps) with the
+// override fully removed: icons and count badges dim/brighten correctly with zero custom code —
+// plain NSTableCellView/NSImageView/NSTextField backgroundStyle propagation already handles all
+// of it. The only real custom behaviour left here is inline rename.
 public final class SidebarCellView: NSTableCellView, NSTextFieldDelegate {
 
     var countField: NSTextField?
@@ -71,19 +73,6 @@ public final class SidebarCellView: NSTableCellView, NSTextFieldDelegate {
 
     public func controlTextDidEndEditing(_ obj: Notification) {
         finishRenaming(cancelled: false)
-    }
-
-    // MARK: - Background style
-
-    override public var backgroundStyle: NSView.BackgroundStyle {
-        get { super.backgroundStyle }
-        set {
-            super.backgroundStyle = newValue
-            let color: NSColor = newValue == .emphasized ? .white : .labelColor
-            imageView?.symbolConfiguration = NSImage.SymbolConfiguration(textStyle: .body, scale: .small)
-                .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
-            countField?.textColor = newValue == .emphasized ? .white : .tertiaryLabelColor
-        }
     }
 }
 #endif
