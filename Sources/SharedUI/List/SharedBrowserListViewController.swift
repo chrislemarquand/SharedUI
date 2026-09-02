@@ -46,15 +46,9 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     private let layoutConfig: SharedListLayoutConfig
     private var columnStore: SharedListColumnStore
     private var isApplyingProgrammaticSort = false
-    /// Guards every programmatic column order/width mutation (viewport fit, locked-column
-    /// enforcement, persisted-order restore) so the resize/move notification handlers below
-    /// can tell those apart from a genuine user drag and only persist the latter.
+    /// Guards the locked-column/order-restore moves in `configureList` so the move notification
+    /// handler below can tell those apart from a genuine user drag and only persist the latter.
     private var isApplyingProgrammaticColumnChange = false
-    /// The width each non-primary column *should* have absent a viewport constraint — the
-    /// user's last real drag, or its default. `fitTableToViewportIfNeeded` always computes
-    /// from this, never from a column's possibly-already-shrunk current `.width`, so a
-    /// transient narrow viewport never permanently erases a wider desired width.
-    private var desiredNonPrimaryWidths: [String: CGFloat] = [:]
     private var columnChangeObservers: [NSObjectProtocol] = []
 
     public var contextMenuProvider: ((Int) -> NSMenu?)?
@@ -95,13 +89,14 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
 
     public override func viewDidLayout() {
         super.viewDidLayout()
-        fitTableToViewportIfNeeded()
+        // `sizeToFit()` is AppKit's own native "recompute column widths honoring each column's
+        // resizingMask against the current frame" call — a full recompute each time, not a
+        // delta against a remembered previous width, so unlike passive columnAutoresizingStyle
+        // alone it can't inherit a bad baseline from this view's pre-layout zero-ish frame.
+        // Non-primary columns (`.userResizingMask` only, no `.autoresizingMask`) are untouched
+        // by it, same as the passive mechanism — a user's dragged width is never overridden.
+        tableView.sizeToFit()
         updateListPresentationState(hasItems: tableView.numberOfRows > 0)
-    }
-
-    public override func viewDidAppear() {
-        super.viewDidAppear()
-        fitTableToViewportIfNeeded()
     }
 
     public override func viewWillDisappear() {
@@ -112,7 +107,6 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
 
     public func reloadData() {
         tableView.reloadData()
-        fitTableToViewportIfNeeded()
         updateListPresentationState(hasItems: tableView.numberOfRows > 0)
     }
 
@@ -140,14 +134,36 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         scrollView.drawsBackground = false
 
         tableView.translatesAutoresizingMaskIntoConstraints = true
-        tableView.frame = NSRect(origin: .zero, size: scrollView.contentView.bounds.size)
+        // v1.4 Phase 4.2 (native-first revision): no manual initial frame. Setting one here
+        // (an old `NSRect(origin: .zero, size: scrollView.contentView.bounds.size)`, i.e.
+        // near-zero — nothing has been through Auto Layout yet at this point in viewDidLoad)
+        // gave AppKit's column-autoresize math a bogus zero-width baseline for its first real
+        // delta computation once the clip view later resized this table view for real, which
+        // dumped almost the *entire* window width onto the primary column on top of its own
+        // default width — the exact "enormous Name column, has to scroll to see other columns"
+        // bug this revision was supposed to fix. Autoresizing `.width` below is enough: the
+        // enclosing NSClipView sizes this table view itself once the view hierarchy actually
+        // lays out, the same as any standard NSTableView-in-NSScrollView setup.
         tableView.autoresizingMask = [.width]
         tableView.usesAutomaticRowHeights = false
         tableView.rowHeight = layoutConfig.rowHeight
         let headerView = SharedBrowserListHeaderView()
         headerView.lockedColumnIDs = layoutConfig.lockedColumnIDs
         tableView.headerView = headerView
-        tableView.columnAutoresizingStyle = .noColumnAutoresizing
+        // v1.4 Phase 4.2 (native-first revision): let AppKit own column-width redistribution
+        // instead of hand-computing it. The primary column already carries `.autoresizingMask`
+        // in its resizingMask below (others don't) — with any non-`.noColumnAutoresizing` style,
+        // that's sufficient for AppKit to give 100% of every resize delta to the primary column
+        // automatically, synchronously, on every window/pane resize, with no custom code. This
+        // is exactly Finder's own mechanism for anchoring its Name column. The previous
+        // `.noColumnAutoresizing` + hand-rolled `fitTableToViewportIfNeeded()` (deleted) was
+        // reimplementing this by hand, from view-lifecycle callbacks rather than actual resize
+        // events — which is what produced both the years of "resize doesn't feel native"
+        // complaints and a directly observed bug: the hand-rolled fit recomputing on every
+        // `reloadData()` while rows loaded in caused the horizontal scrollbar to visibly
+        // flicker on/off with the window completely static, as the vertical scroller's own
+        // width claim shifted the computed viewport width across the fit's threshold.
+        tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         tableView.allowsColumnResizing = true
         tableView.allowsMultipleSelection = true
         tableView.allowsEmptySelection = true
@@ -183,10 +199,9 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
                 // way for a persisted visibility set (written before this column existed) to have
                 // ever recorded them — always show them rather than reading stale persisted state.
                 column.isHidden = definition.isToggleable ? !columnStore.isVisible(definition) : false
-                if definition.id != layoutConfig.primaryColumnID {
-                    let width = columnStore.width(forColumnID: definition.id) ?? definition.defaultWidth
+                if definition.id != layoutConfig.primaryColumnID,
+                   let width = columnStore.width(forColumnID: definition.id) {
                     column.width = width
-                    desiredNonPrimaryWidths[definition.id] = width
                 }
             }
         }
@@ -205,11 +220,12 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         ])
     }
 
-    /// `autosaveTableColumns` restores column order from a persisted layout that predates a
-    /// locked column's existence, which can leave it wherever AppKit happened to slot it in
-    /// (commonly the end) rather than adjacent to the primary column as intended. Locked columns
-    /// have no drag-to-reorder affordance for the user to fix this themselves, so pin them back
-    /// to immediately follow the primary column, in the order they're declared, every time.
+    /// A persisted column order (`restorePersistedColumnOrder`, just above in `configureList`)
+    /// can predate a locked column's existence, leaving it wherever that restore happened to
+    /// slot it in (commonly the end) rather than adjacent to the primary column as intended.
+    /// Locked columns have no drag-to-reorder affordance for the user to fix this themselves,
+    /// so pin them back to immediately follow the primary column, in the order they're
+    /// declared, every time.
     private func enforceLockedColumnPositions() {
         guard !layoutConfig.lockedColumnIDs.isEmpty,
               let primaryIndex = tableView.tableColumns.firstIndex(where: { $0.identifier.rawValue == layoutConfig.primaryColumnID })
@@ -249,18 +265,16 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
 
     private func installColumnChangeObservers() {
         let center = NotificationCenter.default
-        // `MainActor.assumeIsolated`, not `Task { @MainActor ... }`, is required here: the
-        // guard these handlers check (`isApplyingProgrammaticColumnChange`) is only true for
-        // the duration of the synchronous call that set it (e.g. fitTableToViewportIfNeeded,
-        // which resets it via `defer` the instant that function returns). NSTableView posts
-        // this notification synchronously the moment `.width`/`moveColumn` runs, still inside
-        // that guarded call — but `Task { @MainActor ... }` defers to a *later* run-loop turn,
-        // by which point the guard has already been reset, so it never actually caught a
-        // programmatic change and instead persisted every viewport-driven fit as if it were
-        // user intent (also observed as a ~10x slowdown in
-        // testBrowserViewModeSwitching, from the resulting feedback loop). `assumeIsolated`
-        // runs synchronously in the same call stack — valid because `queue: .main` already
-        // guarantees this closure only ever fires on the main thread.
+        // `MainActor.assumeIsolated`, not `Task { @MainActor ... }`, is required here: a
+        // `Task { @MainActor ... }` defers to a *later* run-loop turn, which broke the
+        // equivalent guard this file used to need around a hand-rolled viewport-fit
+        // computation (see git history / docs/v1.4-progress.md's Phase 4.2 detail) — that
+        // computation is gone now (AppKit's own `.uniformColumnAutoresizingStyle` replaces it),
+        // but the same synchronous-dispatch requirement still applies to
+        // `isApplyingProgrammaticColumnChange` below, guarding the locked-column/order-restore
+        // moves in `configureList`. `assumeIsolated` runs synchronously in the same call stack
+        // — valid because `queue: .main` already guarantees this closure only fires on the main
+        // thread.
         columnChangeObservers.append(center.addObserver(
             forName: NSTableView.columnDidResizeNotification,
             object: tableView,
@@ -281,17 +295,14 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         })
     }
 
-    /// Only a genuine user drag reaches here — every programmatic width write (viewport fit,
-    /// locked-column enforcement, order restore) sets `isApplyingProgrammaticColumnChange`
-    /// first. This is what stops a transient, viewport-driven width from being mistaken for
-    /// durable user intent (docs/window-list-resize-diagnosis-2026-07.md's core anti-pattern).
+    /// AppKit's native `.uniformColumnAutoresizingStyle` (see `configureList`) only ever
+    /// resizes the primary column on a window/pane resize — a non-primary column's width only
+    /// ever changes via a genuine user drag (`.userResizingMask`), so nothing here needs to
+    /// guess at intent; simply persist every non-primary column's current width whenever any
+    /// of them changes.
     private func handleColumnDidResize() {
-        guard !isApplyingProgrammaticColumnChange else { return }
         for column in tableView.tableColumns where column.identifier.rawValue != layoutConfig.primaryColumnID {
-            let columnID = column.identifier.rawValue
-            guard desiredNonPrimaryWidths[columnID] != column.width else { continue }
-            desiredNonPrimaryWidths[columnID] = column.width
-            columnStore.setWidth(column.width, forColumnID: columnID)
+            columnStore.setWidth(column.width, forColumnID: column.identifier.rawValue)
         }
     }
 
@@ -342,82 +353,12 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         column.isHidden = !newVisible
         sender.state = newVisible ? .on : .off
         columnStore.setVisible(columnID, newVisible, allDefinitions: columns)
-        adjustTableForColumnToggle()
         host?.sharedBrowserListColumnVisibilityDidChange(self, columnID: definition.id, isVisible: newVisible)
     }
 
     private func updateListPresentationState(hasItems: Bool) {
         tableView.usesAlternatingRowBackgroundColors = hasItems
         tableView.headerView?.isHidden = !hasItems
-    }
-
-    private func syncTableWidthToViewportIfNeeded() {
-        let width = scrollView.contentView.bounds.width
-        guard width > 0 else { return }
-        if abs(tableView.frame.width - width) > 0.5 {
-            var frame = tableView.frame
-            frame.size.width = width
-            tableView.frame = frame
-        }
-    }
-
-    /// The single source of truth for column width on every layout pass — runs unconditionally
-    /// (no one-shot gate), so a transient pre-window-restoration frame at launch has no lasting
-    /// effect: the very next layout pass (once the real frame is known) simply recomputes
-    /// correctly. Non-primary columns get their full desired width when there's room; when the
-    /// viewport has shrunk since the desired widths were set, they're shrunk proportionally
-    /// toward their minimums rather than left to overflow the table into horizontal scroll.
-    /// Only genuinely insufficient space (even at every column's minimum) falls through to that
-    /// overflow. All writes here are programmatic, not user intent — see
-    /// `isApplyingProgrammaticColumnChange`.
-    private func fitTableToViewportIfNeeded() {
-        let viewportWidth = scrollView.contentView.bounds.width
-        guard viewportWidth > 0 else { return }
-        guard let primaryColumn = tableView.tableColumns.first(where: {
-            $0.identifier.rawValue == layoutConfig.primaryColumnID
-        }) else {
-            syncTableWidthToViewportIfNeeded()
-            return
-        }
-
-        let nonPrimary = tableView.tableColumns.filter {
-            !$0.isHidden && $0.identifier.rawValue != layoutConfig.primaryColumnID
-        }
-        let desiredWidths = nonPrimary.map { desiredNonPrimaryWidths[$0.identifier.rawValue] ?? $0.width }
-        let desiredOthersWidth = desiredWidths.reduce(0, +)
-        let othersMinWidth = nonPrimary.reduce(0.0) { $0 + $1.minWidth }
-
-        tableView.autoresizingMask = []
-        isApplyingProgrammaticColumnChange = true
-        defer { isApplyingProgrammaticColumnChange = false }
-
-        var frame = tableView.frame
-        if desiredOthersWidth + primaryColumn.minWidth <= viewportWidth {
-            for (column, desired) in zip(nonPrimary, desiredWidths) { column.width = desired }
-            primaryColumn.width = viewportWidth - desiredOthersWidth
-            frame.size.width = floor(viewportWidth)
-        } else if othersMinWidth + primaryColumn.minWidth <= viewportWidth {
-            primaryColumn.width = primaryColumn.minWidth
-            let available = viewportWidth - primaryColumn.minWidth
-            let shrinkableTotal = desiredOthersWidth - othersMinWidth
-            let excess = desiredOthersWidth - available
-            for (column, desired) in zip(nonPrimary, desiredWidths) {
-                let slack = desired - column.minWidth
-                let share = shrinkableTotal > 0 ? slack / shrinkableTotal : 0
-                column.width = desired - excess * share
-            }
-            frame.size.width = floor(viewportWidth)
-        } else {
-            primaryColumn.width = primaryColumn.minWidth
-            for column in nonPrimary { column.width = column.minWidth }
-            frame.size.width = ceil(othersMinWidth + primaryColumn.minWidth)
-        }
-        tableView.frame = frame
-        tableView.tile()
-    }
-
-    private func adjustTableForColumnToggle() {
-        fitTableToViewportIfNeeded()
     }
 
     public func numberOfRows(in _: NSTableView) -> Int {
