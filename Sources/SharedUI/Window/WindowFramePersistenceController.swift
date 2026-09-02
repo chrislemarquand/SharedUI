@@ -3,9 +3,6 @@ import AppKit
 
 @MainActor
 public final class WindowFramePersistenceController: NSObject {
-    private weak var window: NSWindow?
-    private let autosaveName: String
-
     public init(
         window: NSWindow,
         autosaveName: String,
@@ -13,9 +10,7 @@ public final class WindowFramePersistenceController: NSObject {
         defaultContentSize: NSSize? = nil,
         centerWhenUnrestored: Bool = true
     ) {
-        self.autosaveName = autosaveName
         super.init()
-        self.window = window
 
         if let minSize {
             window.minSize = minSize
@@ -29,42 +24,11 @@ public final class WindowFramePersistenceController: NSObject {
             }
         }
 
+        // v1.4 Phase 4.2: setFrameAutosaveName already makes AppKit observe move/live-resize-end
+        // and persist the frame itself — this used to also register its own didMove/
+        // didEndLiveResize observers that wrote the identical value to the identical key, which
+        // was harmless but pure duplication (docs/window-list-resize-diagnosis-2026-07.md #4).
         window.setFrameAutosaveName(autosaveName)
-        registerObservers(for: window)
-    }
-
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-
-    private func registerObservers(for window: NSWindow) {
-        let center = NotificationCenter.default
-        center.addObserver(
-            self,
-            selector: #selector(handleWindowDidMove),
-            name: NSWindow.didMoveNotification,
-            object: window
-        )
-        center.addObserver(
-            self,
-            selector: #selector(handleWindowDidEndLiveResize),
-            name: NSWindow.didEndLiveResizeNotification,
-            object: window
-        )
-    }
-
-    @objc
-    private func handleWindowDidMove() {
-        persistFrame()
-    }
-
-    @objc
-    private func handleWindowDidEndLiveResize() {
-        persistFrame()
-    }
-
-    private func persistFrame() {
-        window?.saveFrame(usingName: autosaveName)
     }
 }
 #endif

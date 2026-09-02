@@ -50,16 +50,13 @@ public struct SharedListSelectionSnapshot: Sendable, Hashable {
 public struct SharedListPersistenceConfig: Sendable, Hashable {
     public let autosaveName: String
     public let visibilityDefaultsKey: String
-    public let initialFitDefaultsKey: String
 
     public init(
         autosaveName: String,
-        visibilityDefaultsKey: String,
-        initialFitDefaultsKey: String
+        visibilityDefaultsKey: String
     ) {
         self.autosaveName = autosaveName
         self.visibilityDefaultsKey = visibilityDefaultsKey
-        self.initialFitDefaultsKey = initialFitDefaultsKey
     }
 }
 

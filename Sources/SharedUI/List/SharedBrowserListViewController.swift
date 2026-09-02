@@ -46,6 +46,16 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     private let layoutConfig: SharedListLayoutConfig
     private var columnStore: SharedListColumnStore
     private var isApplyingProgrammaticSort = false
+    /// Guards every programmatic column order/width mutation (viewport fit, locked-column
+    /// enforcement, persisted-order restore) so the resize/move notification handlers below
+    /// can tell those apart from a genuine user drag and only persist the latter.
+    private var isApplyingProgrammaticColumnChange = false
+    /// The width each non-primary column *should* have absent a viewport constraint — the
+    /// user's last real drag, or its default. `fitTableToViewportIfNeeded` always computes
+    /// from this, never from a column's possibly-already-shrunk current `.width`, so a
+    /// transient narrow viewport never permanently erases a wider desired width.
+    private var desiredNonPrimaryWidths: [String: CGFloat] = [:]
+    private var columnChangeObservers: [NSObjectProtocol] = []
 
     public var contextMenuProvider: ((Int) -> NSMenu?)?
     /// When true, rows can be reordered by dragging. `onRowReordered` is called with
@@ -63,7 +73,7 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         self.layoutConfig = layoutConfig
         self.columnStore = SharedListColumnStore(
             visibleKey: persistence.visibilityDefaultsKey,
-            initialFitKey: persistence.initialFitDefaultsKey
+            autosaveName: persistence.autosaveName
         )
         super.init(nibName: nil, bundle: nil)
     }
@@ -86,20 +96,23 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
     public override func viewDidLayout() {
         super.viewDidLayout()
         fitTableToViewportIfNeeded()
-        applyInitialColumnFitIfNeeded()
         updateListPresentationState(hasItems: tableView.numberOfRows > 0)
     }
 
     public override func viewDidAppear() {
         super.viewDidAppear()
         fitTableToViewportIfNeeded()
-        applyInitialColumnFitIfNeeded()
+    }
+
+    public override func viewWillDisappear() {
+        super.viewWillDisappear()
+        columnChangeObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        columnChangeObservers = []
     }
 
     public func reloadData() {
         tableView.reloadData()
         fitTableToViewportIfNeeded()
-        applyInitialColumnFitIfNeeded()
         updateListPresentationState(hasItems: tableView.numberOfRows > 0)
     }
 
@@ -164,18 +177,23 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
             tableView.addTableColumn(column)
         }
 
-        tableView.autosaveName = persistence.autosaveName
-        tableView.autosaveTableColumns = true
         for definition in columns {
             if let column = tableView.tableColumns.first(where: { $0.identifier.rawValue == definition.id }) {
                 // Non-toggleable columns have no "Show/Hide" menu entry, so there's no legitimate
                 // way for a persisted visibility set (written before this column existed) to have
                 // ever recorded them — always show them rather than reading stale persisted state.
                 column.isHidden = definition.isToggleable ? !columnStore.isVisible(definition) : false
+                if definition.id != layoutConfig.primaryColumnID {
+                    let width = columnStore.width(forColumnID: definition.id) ?? definition.defaultWidth
+                    column.width = width
+                    desiredNonPrimaryWidths[definition.id] = width
+                }
             }
         }
+        restorePersistedColumnOrder()
         enforceLockedColumnPositions()
         tableView.headerView?.menu = buildColumnHeaderMenu()
+        installColumnChangeObservers()
 
         scrollView.documentView = tableView
         view.addSubview(scrollView)
@@ -197,6 +215,9 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
               let primaryIndex = tableView.tableColumns.firstIndex(where: { $0.identifier.rawValue == layoutConfig.primaryColumnID })
         else { return }
 
+        isApplyingProgrammaticColumnChange = true
+        defer { isApplyingProgrammaticColumnChange = false }
+
         var insertionIndex = primaryIndex + 1
         for definition in columns where layoutConfig.lockedColumnIDs.contains(definition.id) {
             guard let currentIndex = tableView.tableColumns.firstIndex(where: { $0.identifier.rawValue == definition.id }) else { continue }
@@ -205,6 +226,78 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
             }
             insertionIndex += 1
         }
+    }
+
+    /// Restores column order from `columnStore`. Any column absent from a persisted order
+    /// (added after that snapshot was taken) simply keeps its natural `columns`-array
+    /// position — `enforceLockedColumnPositions()` runs immediately after this and will
+    /// correct a locked column's position regardless of how order restore left it.
+    private func restorePersistedColumnOrder() {
+        guard let persistedOrder = columnStore.columnOrder() else { return }
+        isApplyingProgrammaticColumnChange = true
+        defer { isApplyingProgrammaticColumnChange = false }
+
+        var targetIndex = 0
+        for columnID in persistedOrder {
+            guard let currentIndex = tableView.tableColumns.firstIndex(where: { $0.identifier.rawValue == columnID }) else { continue }
+            if currentIndex != targetIndex {
+                tableView.moveColumn(currentIndex, toColumn: targetIndex)
+            }
+            targetIndex += 1
+        }
+    }
+
+    private func installColumnChangeObservers() {
+        let center = NotificationCenter.default
+        // `MainActor.assumeIsolated`, not `Task { @MainActor ... }`, is required here: the
+        // guard these handlers check (`isApplyingProgrammaticColumnChange`) is only true for
+        // the duration of the synchronous call that set it (e.g. fitTableToViewportIfNeeded,
+        // which resets it via `defer` the instant that function returns). NSTableView posts
+        // this notification synchronously the moment `.width`/`moveColumn` runs, still inside
+        // that guarded call — but `Task { @MainActor ... }` defers to a *later* run-loop turn,
+        // by which point the guard has already been reset, so it never actually caught a
+        // programmatic change and instead persisted every viewport-driven fit as if it were
+        // user intent (also observed as a ~10x slowdown in
+        // testBrowserViewModeSwitching, from the resulting feedback loop). `assumeIsolated`
+        // runs synchronously in the same call stack — valid because `queue: .main` already
+        // guarantees this closure only ever fires on the main thread.
+        columnChangeObservers.append(center.addObserver(
+            forName: NSTableView.columnDidResizeNotification,
+            object: tableView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleColumnDidResize()
+            }
+        })
+        columnChangeObservers.append(center.addObserver(
+            forName: NSTableView.columnDidMoveNotification,
+            object: tableView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleColumnDidMove()
+            }
+        })
+    }
+
+    /// Only a genuine user drag reaches here — every programmatic width write (viewport fit,
+    /// locked-column enforcement, order restore) sets `isApplyingProgrammaticColumnChange`
+    /// first. This is what stops a transient, viewport-driven width from being mistaken for
+    /// durable user intent (docs/window-list-resize-diagnosis-2026-07.md's core anti-pattern).
+    private func handleColumnDidResize() {
+        guard !isApplyingProgrammaticColumnChange else { return }
+        for column in tableView.tableColumns where column.identifier.rawValue != layoutConfig.primaryColumnID {
+            let columnID = column.identifier.rawValue
+            guard desiredNonPrimaryWidths[columnID] != column.width else { continue }
+            desiredNonPrimaryWidths[columnID] = column.width
+            columnStore.setWidth(column.width, forColumnID: columnID)
+        }
+    }
+
+    private func handleColumnDidMove() {
+        guard !isApplyingProgrammaticColumnChange else { return }
+        columnStore.setColumnOrder(tableView.tableColumns.map(\.identifier.rawValue))
     }
 
     private func buildColumnHeaderMenu() -> NSMenu {
@@ -268,6 +361,15 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         }
     }
 
+    /// The single source of truth for column width on every layout pass — runs unconditionally
+    /// (no one-shot gate), so a transient pre-window-restoration frame at launch has no lasting
+    /// effect: the very next layout pass (once the real frame is known) simply recomputes
+    /// correctly. Non-primary columns get their full desired width when there's room; when the
+    /// viewport has shrunk since the desired widths were set, they're shrunk proportionally
+    /// toward their minimums rather than left to overflow the table into horizontal scroll.
+    /// Only genuinely insufficient space (even at every column's minimum) falls through to that
+    /// overflow. All writes here are programmatic, not user intent — see
+    /// `isApplyingProgrammaticColumnChange`.
     private func fitTableToViewportIfNeeded() {
         let viewportWidth = scrollView.contentView.bounds.width
         guard viewportWidth > 0 else { return }
@@ -277,41 +379,41 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
             syncTableWidthToViewportIfNeeded()
             return
         }
+
         let nonPrimary = tableView.tableColumns.filter {
             !$0.isHidden && $0.identifier.rawValue != layoutConfig.primaryColumnID
         }
-        let othersWidth = nonPrimary.reduce(0.0) { $0 + $1.width }
-        let minTotal = othersWidth + primaryColumn.minWidth
+        let desiredWidths = nonPrimary.map { desiredNonPrimaryWidths[$0.identifier.rawValue] ?? $0.width }
+        let desiredOthersWidth = desiredWidths.reduce(0, +)
+        let othersMinWidth = nonPrimary.reduce(0.0) { $0 + $1.minWidth }
 
         tableView.autoresizingMask = []
-        if minTotal > viewportWidth {
-            primaryColumn.width = primaryColumn.minWidth
-            var frame = tableView.frame
-            frame.size.width = ceil(minTotal)
-            tableView.frame = frame
-        } else {
-            primaryColumn.width = max(primaryColumn.minWidth, floor(viewportWidth - othersWidth))
-            var frame = tableView.frame
-            frame.size.width = floor(viewportWidth)
-            tableView.frame = frame
-        }
-        tableView.tile()
-    }
+        isApplyingProgrammaticColumnChange = true
+        defer { isApplyingProgrammaticColumnChange = false }
 
-    private func applyInitialColumnFitIfNeeded() {
-        guard !columnStore.hasAppliedInitialFit else { return }
-        guard let primaryColumn = tableView.tableColumns.first(where: {
-            $0.identifier.rawValue == layoutConfig.primaryColumnID
-        }) else { return }
-        let viewportWidth = scrollView.contentView.bounds.width
-        guard viewportWidth > 0 else { return }
-        let visibleNonPrimary = tableView.tableColumns.filter {
-            $0.identifier.rawValue != layoutConfig.primaryColumnID && !$0.isHidden
+        var frame = tableView.frame
+        if desiredOthersWidth + primaryColumn.minWidth <= viewportWidth {
+            for (column, desired) in zip(nonPrimary, desiredWidths) { column.width = desired }
+            primaryColumn.width = viewportWidth - desiredOthersWidth
+            frame.size.width = floor(viewportWidth)
+        } else if othersMinWidth + primaryColumn.minWidth <= viewportWidth {
+            primaryColumn.width = primaryColumn.minWidth
+            let available = viewportWidth - primaryColumn.minWidth
+            let shrinkableTotal = desiredOthersWidth - othersMinWidth
+            let excess = desiredOthersWidth - available
+            for (column, desired) in zip(nonPrimary, desiredWidths) {
+                let slack = desired - column.minWidth
+                let share = shrinkableTotal > 0 ? slack / shrinkableTotal : 0
+                column.width = desired - excess * share
+            }
+            frame.size.width = floor(viewportWidth)
+        } else {
+            primaryColumn.width = primaryColumn.minWidth
+            for column in nonPrimary { column.width = column.minWidth }
+            frame.size.width = ceil(othersMinWidth + primaryColumn.minWidth)
         }
-        let fixedWidth = visibleNonPrimary.reduce(0.0) { $0 + $1.width }
-        primaryColumn.width = max(primaryColumn.minWidth, floor(viewportWidth - fixedWidth))
+        tableView.frame = frame
         tableView.tile()
-        columnStore.hasAppliedInitialFit = true
     }
 
     private func adjustTableForColumnToggle() {
