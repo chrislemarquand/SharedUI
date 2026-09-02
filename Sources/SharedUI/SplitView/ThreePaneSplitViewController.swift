@@ -239,23 +239,20 @@ open class ThreePaneSplitViewController: NSSplitViewController {
     /// Resize-observer hook: only schedule a pane state sync when collapsed state actually flips.
     /// Live divider drags fire didResizeSubviews continuously without changing collapse state.
     ///
-    /// When a flip is detected we *defer* the sync past the implicit collapse animation. A toolbar
-    /// `syncAndValidate` mid-animation mutates `NSToolbarItem.image`/`.label`, which forces toolbar
-    /// re-layout and causes `NSTrackingSeparatorToolbarItem` to flush the split-view animation
-    /// transaction (the sidebar visibly snaps to its target position instead of animating).
+    /// v1.4 Phase 4.3: this used to defer the sync 0.35s past the implicit collapse animation,
+    /// working around a toolbar `syncAndValidate` mid-animation mutating `NSToolbarItem.image`/
+    /// `.label` and forcing a `NSTrackingSeparatorToolbarItem` to flush the split-view animation
+    /// transaction (the sidebar visibly snapping instead of animating). Confirmed live on macOS
+    /// 27 (both Ledger and Librarian, repeated sidebar/inspector toggling): the animation is
+    /// smooth firing immediately, no defer needed — the underlying toolbar/animation-transaction
+    /// interaction this worked around no longer occurs.
     private func schedulePaneStateSyncIfCollapseChanged() {
         let sidebar = sidebarItem.isCollapsed
         let inspector = inspectorItem.isCollapsed
         guard sidebar != lastObservedSidebarCollapsed || inspector != lastObservedInspectorCollapsed else { return }
         lastObservedSidebarCollapsed = sidebar
         lastObservedInspectorCollapsed = inspector
-
-        // Default NSSplitViewItem collapse animation is ~0.25s. A small buffer past that lets the
-        // animation finish before any toolbar mutations land.
-        let deadline: DispatchTime = .now() + 0.35
-        DispatchQueue.main.asyncAfter(deadline: deadline) { [weak self] in
-            self?.onPaneStateChanged?()
-        }
+        onPaneStateChanged?()
     }
 
     private func ensureInitialInspectorVisibility() {
