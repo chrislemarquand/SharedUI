@@ -443,6 +443,13 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         return cell
     }
 
+    // v1.4 Phase 4.3 (item 7): rebuilt on a plain NSStackView instead of a hand-toggled pair of
+    // mutually exclusive trailing constraints for the title field (one for "count showing", one
+    // for "no count"), flipped on every reuse depending on badgeText. A stack view's standard,
+    // documented behaviour already does this for free: a hidden arranged subview (the count
+    // field, when there's no badge) collapses its own space and the surrounding spacing
+    // automatically, so the title field naturally extends to fill whatever's left — no manual
+    // constraint bookkeeping needed at all.
     private func makeItemView(_ sidebarItem: Item) -> NSView {
         let id = NSUserInterfaceItemIdentifier("SidebarItemCell")
         let cell: SidebarCellView
@@ -453,8 +460,9 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             cell.identifier = id
 
             let icon = NSImageView()
-            icon.translatesAutoresizingMaskIntoConstraints = false
             icon.imageScaling = .scaleNone
+            icon.setContentHuggingPriority(.required, for: .horizontal)
+            icon.setContentCompressionResistancePriority(.required, for: .horizontal)
 
             let titleField = NSTextField()
             titleField.isEditable = false
@@ -465,46 +473,40 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             // hard-clips against the count badge. SidebarCellView enables scrolling
             // only for the duration of an inline rename.
             titleField.lineBreakMode = .byTruncatingTail
-            titleField.translatesAutoresizingMaskIntoConstraints = false
+            // Low hugging/compression: the title is the one flexible element in the row,
+            // expanding to fill available space and truncating under pressure, while the
+            // icon and count stay at their natural (required) size either side of it.
+            titleField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            titleField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
             let countField = NSTextField(labelWithString: "")
-            countField.translatesAutoresizingMaskIntoConstraints = false
             countField.font = .monospacedDigitSystemFont(
                 ofSize: NSFont.smallSystemFontSize, weight: .regular)
             countField.textColor = .tertiaryLabelColor
             countField.alignment = .right
-            countField.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-            countField.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+            countField.setContentHuggingPriority(.required, for: .horizontal)
+            countField.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-            cell.addSubview(icon)
-            cell.addSubview(titleField)
-            cell.addSubview(countField)
+            let stack = NSStackView(views: [icon, titleField, countField])
+            stack.orientation = .horizontal
+            stack.alignment = .centerY
+            stack.distribution = .fill
+            stack.spacing = 4
+            stack.setCustomSpacing(8, after: titleField)
+            stack.translatesAutoresizingMaskIntoConstraints = false
+
+            cell.addSubview(stack)
             cell.imageView = icon
             cell.textField = titleField
             cell.countField = countField
 
-            // Two mutually exclusive trailing constraints for the title field:
-            // • titleTrailingToCount — active when a count is shown; title stops before the count
-            // • titleTrailingToCell  — active when no count; title can reach the cell edge
-            let titleToCount = titleField.trailingAnchor.constraint(
-                lessThanOrEqualTo: countField.leadingAnchor, constant: -8)
-            let titleToCell = titleField.trailingAnchor.constraint(
-                lessThanOrEqualTo: cell.trailingAnchor, constant: -8)
-            cell.titleTrailingToCount = titleToCount
-            cell.titleTrailingToCell = titleToCell
-
             NSLayoutConstraint.activate([
-                icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
-                icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
                 icon.widthAnchor.constraint(equalToConstant: 22),
                 icon.heightAnchor.constraint(equalToConstant: 22),
 
-                titleField.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 4),
-                titleField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                titleToCell,     // active by default — no count on initial creation
-
-                countField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
-                countField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                stack.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
+                stack.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+                stack.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             ])
         }
 
@@ -517,13 +519,9 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         if let text = sidebarItem.badgeText, !text.isEmpty {
             cell.countField?.stringValue = text
             cell.countField?.isHidden = false
-            cell.titleTrailingToCount?.isActive = true
-            cell.titleTrailingToCell?.isActive = false
         } else {
             cell.countField?.stringValue = ""
             cell.countField?.isHidden = true
-            cell.titleTrailingToCount?.isActive = false
-            cell.titleTrailingToCell?.isActive = true
         }
 
         return cell

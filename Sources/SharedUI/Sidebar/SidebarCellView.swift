@@ -8,8 +8,6 @@ import AppKit
 public final class SidebarCellView: NSTableCellView, NSTextFieldDelegate {
 
     var countField: NSTextField?
-    var titleTrailingToCount: NSLayoutConstraint?
-    var titleTrailingToCell: NSLayoutConstraint?
 
     // MARK: - Inline rename
 
