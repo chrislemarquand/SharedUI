@@ -27,6 +27,9 @@ public final class PathBarViewController: NSViewController {
         didSet { pathControl.placeholderString = placeholderString }
     }
 
+    /// Called with the URL of whichever breadcrumb component the user clicked.
+    public var onItemClicked: ((URL) -> Void)?
+
 
     // MARK: - Private
 
@@ -58,6 +61,8 @@ public final class PathBarViewController: NSViewController {
         // Let it compress freely — NSPathControl truncates/overflows into a popup
         // button on its own once it's allowed to shrink.
         pathControl.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pathControl.target = self
+        pathControl.action = #selector(handlePathControlClick(_:))
         view.addSubview(pathControl)
 
         NSLayoutConstraint.activate([
@@ -71,6 +76,11 @@ public final class PathBarViewController: NSViewController {
             pathControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
             pathControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
         ])
+    }
+
+    @objc private func handlePathControlClick(_ sender: NSPathControl) {
+        guard let url = sender.clickedPathItem?.url else { return }
+        onItemClicked?(url)
     }
 
 }
