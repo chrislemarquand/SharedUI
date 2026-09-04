@@ -24,13 +24,6 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     public var onItemPromotedToSection: ((Item, Section) -> Void)?
     /// Set to enable inline rename on double-click. When nil, double-click has no effect.
     public var onRenameItem: ((Item, String) -> Void)?
-    /// Lazily supplies an item's children, enabling arbitrary-depth expansion below the
-    /// section level. Called on-demand by AppKit for each visible row (never a pre-scan of
-    /// the whole tree). `nil` (the default) preserves today's flat two-level behavior exactly.
-    public var childrenProvider: ((Item) -> [Item])?
-    /// Whether an item should show a disclosure triangle at all. Only consulted when
-    /// `childrenProvider` is also set.
-    public var isExpandableProvider: ((Item) -> Bool)?
     public init(
         sections: [Section],
         items: [Item],
@@ -66,19 +59,6 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             previousSections = []
         }
 
-        // Snapshot expanded item-level (tree) nodes by value identity, since ItemBox
-        // instances are reused via itemBoxCache — see box(for:) — but a row's expanded
-        // state in the live outline view is keyed by whichever box object is currently
-        // visible at that row.
-        var expandedItems: Set<Item> = []
-        if childrenProvider != nil {
-            for row in 0..<outlineView.numberOfRows {
-                guard let box = outlineView.item(atRow: row) as? ItemBox,
-                      outlineView.isItemExpanded(box) else { continue }
-                expandedItems.insert(box.item)
-            }
-        }
-
         rebuildBoxes()
         outlineView.reloadData()
 
@@ -92,28 +72,10 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             }
         }
 
-        if !expandedItems.isEmpty {
-            for sectionBox in orderedSectionBoxes {
-                let sectionItems = itemsBySection[ObjectIdentifier(sectionBox)]?.map(\.item) ?? []
-                restoreItemExpansion(items: sectionItems, expandedItems: expandedItems)
-            }
-        }
-
         if let prev = previouslySelected {
             isSuppressingSelectionCallbacks = true
             selectItem(where: { $0 == prev })
             isSuppressingSelectionCallbacks = false
-        }
-    }
-
-    /// Recursively re-expands tree nodes that were expanded before a reload, walking only
-    /// into subtrees that need it (never a full pre-scan of the whole tree).
-    private func restoreItemExpansion(items: [Item], expandedItems: Set<Item>) {
-        guard let childrenProvider else { return }
-        for item in items {
-            guard expandedItems.contains(item) else { continue }
-            outlineView.expandItem(box(for: item))
-            restoreItemExpansion(items: childrenProvider(item), expandedItems: expandedItems)
         }
     }
 
@@ -171,11 +133,6 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     // Stable reference-type boxes so NSOutlineView gets consistent identity across calls.
     private var orderedSectionBoxes: [SectionBox] = []
     private var itemsBySection: [ObjectIdentifier: [ItemBox]] = [:]
-    // Persists across reloadData() calls (unlike orderedSectionBoxes/itemsBySection, which are
-    // rebuilt fresh every time) so a tree node's box identity is stable — required for
-    // NSOutlineView's own isItemExpanded/expandItem tracking, which is keyed by object identity,
-    // to keep working across reloads for item-level (not just section-level) expansion.
-    private var itemBoxCache: [Item: ItemBox] = [:]
 
     private final class SectionBox: NSObject {
         let section: Section
@@ -183,26 +140,16 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
     }
 
     private final class ItemBox: NSObject {
-        var item: Item
+        let item: Item
         init(_ item: Item) { self.item = item }
-    }
-
-    private func box(for item: Item) -> ItemBox {
-        if let existing = itemBoxCache[item] {
-            existing.item = item
-            return existing
-        }
-        let box = ItemBox(item)
-        itemBoxCache[item] = box
-        return box
     }
 
     private func rebuildBoxes() {
         orderedSectionBoxes = sections.map { SectionBox($0) }
         itemsBySection = [:]
-        for sectionBox in orderedSectionBoxes {
-            let sectionItems = items.filter { $0.section == sectionBox.section }
-            itemsBySection[ObjectIdentifier(sectionBox)] = sectionItems.map { box(for: $0) }
+        for box in orderedSectionBoxes {
+            let sectionItems = items.filter { $0.section == box.section }
+            itemsBySection[ObjectIdentifier(box)] = sectionItems.map { ItemBox($0) }
         }
     }
 
@@ -289,10 +236,6 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             if let box = item as? SectionBox {
                 return itemsBySection[ObjectIdentifier(box)]?.count ?? 0
             }
-            if let box = item as? ItemBox {
-                guard let childrenProvider, isExpandableProvider?(box.item) == true else { return 0 }
-                return childrenProvider(box.item).count
-            }
             return 0
         }
 
@@ -303,18 +246,10 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
                let children = itemsBySection[ObjectIdentifier(box)] {
                 return children[index]
             }
-            if let box = item as? ItemBox, let childrenProvider {
-                let children = childrenProvider(box.item)
-                return self.box(for: children[index])
-            }
             return orderedSectionBoxes[0]
         }
 
-        proxy.isItemExpandable = { [weak self] item in
-            if item is SectionBox { return true }
-            guard let self, let box = item as? ItemBox else { return false }
-            return isExpandableProvider?(box.item) ?? false
-        }
+        proxy.isItemExpandable = { item in item is SectionBox }
         proxy.isGroupItem = { item in item is SectionBox }
         proxy.shouldSelectItem = { item in item is ItemBox }
 
