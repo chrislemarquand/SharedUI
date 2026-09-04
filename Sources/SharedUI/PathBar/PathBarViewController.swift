@@ -19,7 +19,7 @@ public final class PathBarViewController: NSViewController {
 
     /// The path to display. Set to `nil` to show `placeholderString`.
     public var url: URL? {
-        didSet { pathControl.url = url }
+        didSet { applyURL() }
     }
 
     /// Displayed when `url` is `nil`.
@@ -29,6 +29,16 @@ public final class PathBarViewController: NSViewController {
 
     /// Called with the URL of whichever breadcrumb component the user clicked.
     public var onItemClicked: ((URL) -> Void)?
+
+    /// When set, and `url` is at or under `root`, the breadcrumb starts at `root` labeled
+    /// `title` instead of walking the real filesystem ancestors above it — needed for a
+    /// location whose on-disk path doesn't match its user-facing name (e.g. iCloud Drive, whose
+    /// real path is a nested, Apple-internal folder name that some macOS versions render as two
+    /// confusingly-duplicated "iCloud Drive" breadcrumb segments if handed to `NSPathControl`
+    /// directly). `nil` (the default) preserves plain automatic behavior for every other path.
+    public var rootOverride: (title: String, root: URL)? {
+        didSet { applyURL() }
+    }
 
 
     // MARK: - Private
@@ -81,6 +91,44 @@ public final class PathBarViewController: NSViewController {
     @objc private func handlePathControlClick(_ sender: NSPathControl) {
         guard let url = sender.clickedPathItem?.url else { return }
         onItemClicked?(url)
+    }
+
+    private func applyURL() {
+        guard let url else {
+            pathControl.url = nil
+            return
+        }
+        pathControl.url = url
+        guard let rootOverride, isURL(url, atOrUnder: rootOverride.root) else { return }
+        collapseAncestors(above: rootOverride)
+    }
+
+    private func isURL(_ url: URL, atOrUnder root: URL) -> Bool {
+        let candidate = url.standardizedFileURL.resolvingSymlinksInPath().path
+        let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path
+        return candidate == rootPath || candidate.hasPrefix(rootPath + "/")
+    }
+
+    /// `NSPathControlItem.url` is read-only — items can't be hand-built with a custom URL, so
+    /// this instead lets `NSPathControl` build its normal real-filesystem-hierarchy items from
+    /// `url` (keeping every item's own URL intact for `onItemClicked`), then trims off whatever
+    /// ancestor items sit above `root` and renames the one that IS `root` to its clean
+    /// user-facing title. Needed because some macOS versions render the real, nested,
+    /// Apple-internal iCloud Drive path as two consecutive "iCloud Drive"-titled breadcrumb
+    /// segments (an ancestor folder aliased to that name, then the real one) when handed to
+    /// `NSPathControl` directly — this collapses that (and any other unwanted ancestor chain
+    /// above a known root) down to a single, correctly-named node.
+    private func collapseAncestors(above root: (title: String, root: URL)) {
+        let items = pathControl.pathItems
+        let rootPath = root.root.standardizedFileURL.resolvingSymlinksInPath().path
+        guard let rootIndex = items.firstIndex(where: { item in
+            guard let itemURL = item.url else { return false }
+            return itemURL.standardizedFileURL.resolvingSymlinksInPath().path == rootPath
+        }) else { return }
+
+        let trimmed = Array(items[rootIndex...])
+        trimmed.first?.title = root.title
+        pathControl.pathItems = trimmed
     }
 
 }

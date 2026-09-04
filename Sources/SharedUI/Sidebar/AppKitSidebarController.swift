@@ -79,6 +79,11 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
         }
     }
 
+    /// Selects the first row matching `predicate`. If nothing matches — e.g. the model's current
+    /// selection is an item this sidebar doesn't display at all, such as a folder reached by
+    /// drilling into it from the browser rather than via a visible sidebar row — clears the
+    /// selection instead of silently leaving whatever row was previously highlighted looking
+    /// selected, which would misrepresent the real current selection.
     public func selectItem(where predicate: (Item) -> Bool) {
         for row in 0..<outlineView.numberOfRows {
             guard let box = outlineView.item(atRow: row) as? ItemBox,
@@ -86,8 +91,9 @@ where Section: AppKitSidebarSectionType, Item: AppKitSidebarItemType, Item.Secti
             isSuppressingSelectionCallbacks = true
             outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
             isSuppressingSelectionCallbacks = false
-            break
+            return
         }
+        clearSelection()
     }
 
     public func clearSelection() {
