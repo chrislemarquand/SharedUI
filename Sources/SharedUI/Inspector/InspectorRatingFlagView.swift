@@ -264,6 +264,10 @@ private struct InspectorRatingFlagSymbolLabel: View {
         Image(systemName: symbolName)
             .font(.system(size: 14))
             .foregroundStyle(symbolColor)
+            // Keyed on symbolName rather than a separate counter: it already changes
+            // exactly when a star/flag's fill state flips (e.g. "star" <-> "star.fill"),
+            // so only the cells whose state actually changed bounce.
+            .symbolEffect(.bounce.up.byLayer, options: .nonRepeating, value: symbolName)
     }
 
     private var symbolColor: Color {

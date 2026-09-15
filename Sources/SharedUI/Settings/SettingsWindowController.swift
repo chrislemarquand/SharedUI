@@ -124,6 +124,21 @@ private final class SettingsTabViewController: NSTabViewController {
         targetFrame.size.width += widthDelta
         targetFrame.size.height += heightDelta
         targetFrame.origin.y -= heightDelta
+        // Growing downward from wherever the window already happens to be sitting can push
+        // its bottom edge below the visible screen — `constrainFrameRect` below only
+        // guarantees the title bar stays reachable, not that the whole window fits. The
+        // height clamp above already ensures the (possibly-clamped) content height fits the
+        // screen; reposition vertically here so the grown window is actually fully visible,
+        // not just draggable.
+        if let visibleFrame = window.screen?.visibleFrame {
+            if targetFrame.minY < visibleFrame.minY {
+                targetFrame.origin.y = visibleFrame.minY
+            }
+            let maxY = visibleFrame.maxY - targetFrame.height
+            if targetFrame.origin.y > maxY {
+                targetFrame.origin.y = maxY
+            }
+        }
         let constrainedFrame = window.constrainFrameRect(targetFrame, to: window.screen)
         window.setFrame(constrainedFrame, display: true, animate: animated)
     }

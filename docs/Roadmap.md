@@ -51,6 +51,34 @@ Inventory (audited 2026-08-15):
 
 Not workarounds (checked, keep): `SharedGalleryLayout` section insets; Librarian notice-bar safe-area constraint; Ledger's `#available(macOS 26.0)` toolbar `.prominent` style (deliberate API adoption).
 
+### List/Icon/Gallery selection-highlight consistency — [Done, v1.4 Phase 4.3, 2026-09-02]
+*(Sourced from: observed in Ledger, applies to any app using `SharedGalleryCollectionView`)*
+
+Was: `GallerySelectionStyling.isSelectionEmphasized` only checked
+`NSApp.isActive && window.isKeyWindow`, so a gallery/icon tile's selection
+stayed accent-coloured even after the sidebar took keyboard focus in the
+same key window — inconsistent with List's native, first-responder-driven
+`NSTableRowView.isEmphasized` dimming. `GallerySelectionAppearanceObserver`
+itself turned out not to be a hack (its git history was a dead-end
+squash commit, but its actual role — repainting a custom `CALayer`-drawn
+selection on window key/app-active changes, since `NSCollectionViewItem`
+has no native `backgroundStyle` propagation — is legitimate and still
+needed).
+
+Fixed by making the emphasis check first-responder-aware
+(`view.enclosingScrollView` containment check), plus two supporting fixes
+found live: `NSCollectionView` doesn't promote itself to first responder
+on click the way `NSTableView` does (confirmed via `AXFocusedUIElement`
+before/after a real click), so `SharedGalleryCollectionView.mouseDown` now
+calls `window?.makeFirstResponder(self)` explicitly; and
+`window.firstResponder` still reports the outgoing responder for the
+duration of its own `resignFirstResponder()`, so the resulting
+`onFirstResponderStatusChanged` repaint on resign is deferred one runloop
+turn via `DispatchQueue.main.async`. Verified end-to-end with real
+CGEvent-driven clicks (AX-synthetic clicks are unreliable for
+focus-transfer testing) + `AXFocusedUIElement` polling in Ledger; Librarian
+doesn't use `isSelectionEmphasized` so needed no changes.
+
 ### Sidebar inactive-window label colour — [Done/moot, v1.4 Phase 4.3, 2026-09-02]
 *(Sourced from: observed in both Ledger and Librarian)*
 

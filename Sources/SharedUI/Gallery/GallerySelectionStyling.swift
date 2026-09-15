@@ -31,9 +31,17 @@ public enum GallerySelectionStyling {
         return resolved
     }
 
+    /// Mirrors `NSTableRowView.isEmphasized`'s semantics for custom-drawn collection view
+    /// selection: emphasized only when the app is active, the window is key, AND first
+    /// responder is within the gallery itself — not merely because the window is key.
+    /// This keeps a gallery/icon tile's selection colour consistent with the sidebar's
+    /// native table-row behaviour when focus moves elsewhere in the same key window.
     @MainActor
     public static func isSelectionEmphasized(in view: NSView?) -> Bool {
-        NSApp.isActive && (view?.window?.isKeyWindow == true)
+        guard NSApp.isActive, let window = view?.window, window.isKeyWindow else { return false }
+        guard let container = view?.enclosingScrollView ?? view else { return false }
+        guard let responder = window.firstResponder as? NSView else { return false }
+        return responder === container || responder.isDescendant(of: container)
     }
 }
 #endif

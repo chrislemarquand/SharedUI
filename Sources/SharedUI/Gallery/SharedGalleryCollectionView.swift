@@ -9,12 +9,40 @@ public final class SharedGalleryCollectionView: NSCollectionView {
     public var contextMenuProvider: ((IndexPath) -> NSMenu?)?
     public var onDoubleClick: ((IndexPath) -> Void)?
     public var onActivateSelection: (() -> Void)?
+    public var onFirstResponderStatusChanged: (() -> Void)?
 
     /// Ledger currently ignores shift+arrow movement; Librarian uses it to extend selection.
     public var allowsShiftExtendedMovement: Bool = true
     public var handlesActivateOnReturn: Bool = true
 
+    override public func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
+        if result { onFirstResponderStatusChanged?() }
+        return result
+    }
+
+    override public func resignFirstResponder() -> Bool {
+        let result = super.resignFirstResponder()
+        if result {
+            // window.firstResponder still reports the outgoing responder (self) until this
+            // method returns, so a synchronous callback here would see a stale "still focused"
+            // state. Defer to the next runloop turn, by which point the window has already
+            // installed the new first responder.
+            DispatchQueue.main.async { [weak self] in
+                self?.onFirstResponderStatusChanged?()
+            }
+        }
+        return result
+    }
+
     override public func mouseDown(with event: NSEvent) {
+        // Unlike NSTableView, NSCollectionView does not promote itself to first responder
+        // on click. Do it explicitly so selection emphasis (and keyboard navigation) follows
+        // a plain click the same way it would for a table/outline row.
+        if window?.firstResponder !== self {
+            window?.makeFirstResponder(self)
+        }
+
         let point = convert(event.locationInWindow, from: nil)
         let clickedIndexPath = indexPathForItem(at: point)
         let hadSelectionBefore = !selectionIndexPaths.isEmpty
