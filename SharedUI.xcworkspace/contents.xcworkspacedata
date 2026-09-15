@@ -2,12 +2,12 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "absolute:/Users/chrislemarquand/Xcode Projects/Librarian/Librarian.xcodeproj">
+      location = "group:../Librarian/Librarian.xcodeproj">
    </FileRef>
    <FileRef
-      location = "absolute:/Users/chrislemarquand/Xcode Projects/Ledger/Ledger.xcodeproj">
+      location = "group:../Ledger/Ledger.xcodeproj">
    </FileRef>
    <FileRef
-      location = "absolute:/Users/chrislemarquand/Xcode Projects/Ripcord/Ripcord.xcodeproj">
+      location = "group:../Ripcord/Ripcord.xcodeproj">
    </FileRef>
 </Workspace>

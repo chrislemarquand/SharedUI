@@ -1,6 +1,7 @@
 .DS_Store
 .swiftpm/
 .build/
+build/
+*.profraw
 *.xcuserstate
 *.xcworkspace/xcuserdata/
-*.xcworkspace/xcshareddata/swiftpm/Package.resolved
