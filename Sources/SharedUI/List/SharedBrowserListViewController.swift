@@ -99,6 +99,20 @@ public final class SharedBrowserListViewController: NSViewController, NSTableVie
         updateListPresentationState(hasItems: tableView.numberOfRows > 0)
     }
 
+    // v1.4 architecture-outcome review (2026-09-27, R1): installColumnChangeObservers()
+    // was only ever called once, from configureList() during viewDidLoad — after a genuine
+    // disappear/reappear cycle (this controller is reused, not reallocated, by its own
+    // hosting container the same way BrowserContainerViewController's siblings are),
+    // viewWillDisappear's teardown left columnChangeObservers empty for good, so column
+    // resize/move persistence silently stopped working after the first time this view left
+    // and came back. Reinstalling on reappearance matches the convention already established
+    // elsewhere in this codebase for the identical reuse pattern.
+    public override func viewWillAppear() {
+        super.viewWillAppear()
+        guard columnChangeObservers.isEmpty else { return }
+        installColumnChangeObservers()
+    }
+
     public override func viewWillDisappear() {
         super.viewWillDisappear()
         columnChangeObservers.forEach { NotificationCenter.default.removeObserver($0) }
