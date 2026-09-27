@@ -60,6 +60,16 @@ Any app-specific keyboard shortcuts that don't belong in the shared monitor (e.g
 
 Call `WindowToolbarSetup.configureWindowForToolbar(_:)` early in your toolbar delegate setup, before the window appears, to apply `.fullSizeContentView` and toolbar style. Calling it after the window is visible produces a compositor flash on macOS 26+.
 
+For the toolbar delegate itself, conform to `ToolbarShellContent` (item identifiers + item construction) and hand it to a `ToolbarShellController` rather than implementing `NSToolbarDelegate` per app:
+
+```swift
+private lazy var toolbarShell = ToolbarShellController(content: self)
+// in window setup, after WindowToolbarSetup.configureWindowForToolbar(_:):
+toolbarShell.installToolbar(on: window, identifier: "MainToolbar")
+```
+
+Call `toolbarShell.syncAndValidate(window:)` whenever item enabled/selected state needs revalidating (e.g. after a selection change) rather than calling `window.toolbar?.validateVisibleItems()` directly.
+
 ---
 
 ## 3. Sidebar
@@ -83,9 +93,39 @@ To update badges, mutate `sidebarController.items` and call `reloadData()`. To p
 
 For context menus, assign `sidebarController.menuProvider`. The closure receives the item and returns an `NSMenu?`.
 
+### Drag-to-reorder (opt-in)
+
+Reordering and cross-section "promotion" (dragging an item so it becomes its own section) are both off by default via protocol extension defaults. To opt in, implement on your `Item` type:
+
+```swift
+var sidebarReorderID: String? { id }       // stable identity across reorders
+var isSidebarReorderable: Bool { true }
+var sidebarPromotionTargets: Set<Section> { [] }  // non-empty to allow promotion into these sections
+```
+
+Wire `onItemsReordered` (fires with the new full item order) and, if you allow promotion, `onItemPromotedToSection`. An item with `isSidebarReorderable == false` can still be dragged if it has non-empty `sidebarPromotionTargets` — the two capabilities are independent.
+
 ---
 
-## 4. Gallery
+## 4. Path bar
+
+Instantiate `PathBarViewController` and add its view (fixed height: `PathBarViewController.preferredHeight`, 32pt) above or below your browser content. Set `url` whenever the current folder changes; wire `onItemClicked` to navigate to the clicked breadcrumb segment's URL. Use `rootOverride` when the real filesystem root shouldn't be shown as-is (e.g. label an iCloud container's root with the container's display name instead of its raw path component).
+
+---
+
+## 5. List
+
+Use `SharedBrowserListViewController` as (or embedded within) your list-mode browser view controller. Implement `SharedBrowserListHosting` to supply row data and respond to selection/sort changes — the controller owns the `NSTableView` itself (`tableView`, `scrollView` are both public if you need direct access).
+
+Column definitions are plain `SharedListColumnDefinition` values (id, title, widths, sortability, toggleability, group); back visibility/order/width persistence with a `SharedListColumnStore`, which you initialise with your own storage read/write closures (typically thin wrappers around `UserDefaults`) — the store itself holds no persistence mechanism of its own.
+
+For row drag-to-reorder, set `canReorderRows = true` and wire `onRowReordered`. For context menus, assign `contextMenuProvider`.
+
+**Do not** assume column-change observers survive a hide/show cycle by accident — they don't need special handling from callers because the controller reinstalls them itself on `viewWillAppear` when needed, but if you're embedding `SharedBrowserListViewController` inside your own container that manages its lifecycle non-standardly (not through normal `NSViewController` containment appear/disappear), verify those callbacks still fire.
+
+---
+
+## 6. Gallery
 
 Use `SharedGalleryCollectionView` as the collection view class (set in your view controller or xib). Wire closures before the view appears:
 
@@ -110,7 +150,7 @@ private let zoomAccumulator = PinchZoomAccumulator { [weak self] step in
 
 ---
 
-## 5. Quick Look
+## 7. Quick Look
 
 The coordinator and the keyboard trigger are separate concerns.
 
@@ -142,7 +182,7 @@ Arrow key navigation inside the open panel is handled by the coordinator via `pr
 
 ---
 
-## 6. Settings
+## 8. Settings
 
 Create a `SettingsWindowController` and add tab items for each pane. Subclass `SettingsGridViewController` for each settings pane and override `makeRows()` to define the label/control grid:
 
@@ -160,11 +200,32 @@ For inspector field visibility toggles, use `InspectorFieldSettingsViewControlle
 
 ---
 
-## 7. Context menus
+## 9. Context menus
 
 Use `ContextMenuSupport.targetSelection(clickedIndex:selectedIndices:)` to resolve right-click targets before building the menu. This ensures that right-clicking an unselected item produces a single-item menu while right-clicking within a selection produces the full selection — matching Finder behaviour.
 
 Use `ContextMenuSupport.makeMenuItem(_:symbol:action:)` for consistent item construction.
+
+---
+
+## 10. Notice bar
+
+Hold a `NoticeBarState` on your model/controller and a `NoticeBar(state:)` view in your window chrome (typically above the content pane). Mutate the state object directly:
+
+```swift
+noticeBarState.message = "3 files failed to import."
+noticeBarState.primaryAction = NoticeBarAction(title: "Review") { [weak self] in self?.showImportLog() }
+noticeBarState.isVisible = true
+noticeBar.syncVisibility(animated: true)
+```
+
+`syncVisibility` is not called automatically on every state mutation — call it explicitly after changing `isVisible` (or any field affecting layout) so the show/hide animation actually runs.
+
+---
+
+## 11. Window frame persistence
+
+Instantiate one `WindowFramePersistenceController` per window you want to restore, giving it an autosave name unique to that window (include the app's bundle identifier prefix, matching the split-view autosave name convention in §2). It restores immediately in `init` (`window.setFrameUsingName`), falling back to `defaultContentSize` + centering when there's nothing to restore, then wires `window.setFrameAutosaveName` so AppKit itself persists future moves/resizes — there is no separate save call to wire, and don't add your own `windowDidMove`/`windowDidEndLiveResize` observers alongside it to do the same thing.
 
 ---
 

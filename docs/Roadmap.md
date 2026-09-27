@@ -89,6 +89,31 @@ Was: when a window lost focus, sidebar SF Symbol icons correctly greyed out but 
 
 Ledger plans per-item metadata subtitle customisation in the gallery. If the subtitle configuration is added to `GalleryMetrics` or `SharedGalleryLayout`, it belongs in SharedUI. If it stays as a cell-level concern inside Ledger's cell type, it stays app-side.
 
+### ClosureMenuItem
+*(Sourced from: cross-app UI audit, 2026-03-23, docs/SHARED_UI_AUDIT.md before it was folded in here)*
+
+An `NSMenuItem` subclass storing a closure to avoid `@objc` selector proliferation. Ledger has this app-side (`ClosureMenuItem` in `MainContentView.swift`); Librarian uses the same pattern manually in context menus without a named type. Small, universally useful — extract as a `Utilities/` type.
+
+### Selection feedback-loop guard
+*(Sourced from: cross-app UI audit, 2026-03-23)*
+
+Both apps use an `isApplyingProgrammaticSelection` / `isApplyingProgrammaticSort` boolean flag to suppress `NSCollectionView`/`NSTableView` delegate callbacks during programmatic selection changes. Candidate for a small wrapper (e.g. a `ProgrammaticSelectionGuard` that wraps the mutation and suppresses delegate callbacks for its duration) in `Utilities/`.
+
+### Window subtitle priority protocol
+*(Sourced from: cross-app UI audit, 2026-03-23)*
+
+Librarian's `MainSplitViewController` has `LibrarianWindowSubtitlePriority`, an enum resolving which status message takes precedence (import > indexing > analysis > pending > archive issues > status message). Ledger has simpler, ad hoc subtitle logic covering the same concept. A shared `WindowSubtitleProvider` protocol with priority-based resolution would be cleaner than each app reimplementing it.
+
+### Generalised keyboard monitor installation on ThreePaneSplitViewController
+*(Sourced from: cross-app UI audit, 2026-03-23)*
+
+`KeyboardShortcutSupport` already provides the detection helpers apps need for Tab/Shift-Tab pane switching and inspector-toggle shortcuts (`shouldHandlePaneTabSwitch`, `togglePaneFocus`), but each app still installs its own `NSEvent.addLocalMonitorForEvents(matching: .keyDown)` around them — only the spacebar → Quick Look monitor (`installContentKeyboardMonitor`) was actually consolidated onto the shell. Overlaps with the "Tab pane focus-cycling" item above; if both are picked up, do them together rather than as two separate monitor-installing methods.
+
+### DMS coordinate parser (conditional)
+*(Sourced from: cross-app UI audit, 2026-03-23)*
+
+Ledger's `InspectorView.swift` hand-rolls `parseCoordinate()` (regex-based degrees/minutes/seconds GPS parsing). Only worth extracting if Librarian ever needs location editing — no action until then.
+
 ---
 
 ## Completed
